@@ -23,12 +23,14 @@ const Index = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
-  const [showScrollHint, setShowScrollHint] = useState(true);
+  const [showNotYet, setShowNotYet] = useState(false);
+  const [showScrollHint, setShowScrollHint] = useState(false);
   const { toast } = useToast();
 
   const handleScan = async () => {
     setIsScanning(true);
-    setShowScrollHint(false); // Hide scroll hint when scanning starts
+    setShowNotYet(false);
+    setShowScrollHint(false);
     
     try {
       const dataService = RealDataService.getInstance(toast);
@@ -47,10 +49,11 @@ const Index = () => {
           return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
         });
       
+      console.log('All news fetched:', allNews.length, allNews);
       setNewsData(allNews);
       setHasScanned(true);
 
-      // Detectar AGI - ya sea por modo test o por contenido real
+      // Detectar AGI
       if (testMode) {
         setTimeout(() => {
           setAgiDetected(true);
@@ -69,10 +72,15 @@ const Index = () => {
             setAgiDetected(true);
           }, 1000);
         } else {
-          // Show scroll hint after scan if no AGI detected
+          // Mostrar "Not yet" por 3 segundos después de la búsqueda
+          setShowNotYet(true);
           setTimeout(() => {
-            setShowScrollHint(true);
-          }, 500);
+            setShowNotYet(false);
+            // Luego mostrar scroll hint
+            setTimeout(() => {
+              setShowScrollHint(true);
+            }, 500);
+          }, 3000);
         }
       }
       
@@ -83,7 +91,6 @@ const Index = () => {
         description: "No se pudo conectar a las fuentes",
         variant: "destructive",
       });
-      setShowScrollHint(true); // Show hint even if error
     } finally {
       setIsScanning(false);
     }
@@ -118,17 +125,12 @@ const Index = () => {
     return <span className="text-2xl font-bold">AGI</span>;
   };
 
-  const getStatusText = () => {
-    if (hasScanned && !agiDetected && showScrollHint) return "Not yet";
-    return "";
-  };
-
-  // Handle scroll to hide/show scroll hint
+  // Handle scroll to hide scroll hint
   const handleScroll = () => {
     const scrolled = window.scrollY > 100;
     if (scrolled && showScrollHint) {
       setShowScrollHint(false);
-    } else if (!scrolled && hasScanned && !agiDetected) {
+    } else if (!scrolled && hasScanned && !agiDetected && !showNotYet) {
       setShowScrollHint(true);
     }
   };
@@ -137,11 +139,11 @@ const Index = () => {
   React.useEffect(() => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [hasScanned, agiDetected, showScrollHint]);
+  }, [hasScanned, agiDetected, showNotYet, showScrollHint]);
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Animación de detección AGI mejorada */}
+      {/* Animación de detección AGI simplificada */}
       <AGIDetectionAnimation 
         isDetected={agiDetected} 
         onClose={() => setAgiDetected(false)} 
@@ -173,15 +175,15 @@ const Index = () => {
           </div>
         </Button>
 
-        {/* Status Text - Solo aparece cuando debe */}
-        {getStatusText() && (
+        {/* "Not yet" Message - Solo aparece después de la búsqueda por 3 segundos */}
+        {showNotYet && (
           <div className="mt-6 text-2xl font-bold text-gray-600 animate-fade-in">
-            {getStatusText()}
+            Not yet
           </div>
         )}
 
         {/* Scroll hint - Solo cuando debe aparecer */}
-        {hasScanned && !agiDetected && showScrollHint && (
+        {showScrollHint && (
           <div className="mt-8 text-center animate-bounce">
             <p className="text-gray-500 mb-2">Latest AI news below ↓</p>
             <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center">
