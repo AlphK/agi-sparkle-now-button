@@ -80,6 +80,12 @@ const Index = () => {
     }
   };
 
+  const getButtonText = () => {
+    if (isScanning) return "SCANNING...";
+    if (hasScanned && !agiDetected) return "Not yet";
+    return "Not yet";
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Animación de detección AGI */}
@@ -109,17 +115,17 @@ const Index = () => {
             {isScanning ? (
               <>
                 <Loader2 className="w-12 h-12 animate-spin" />
-                <span className="text-xl font-bold">SCANNING...</span>
+                <span className="text-xl font-bold">{getButtonText()}</span>
               </>
             ) : (
-              <span className="text-2xl font-bold">Not yet</span>
+              <span className="text-2xl font-bold">{getButtonText()}</span>
             )}
           </div>
         </Button>
       </div>
 
-      {/* Stacked Sites Section - Aparece abajo después del scan */}
-      {hasScanned && (
+      {/* Stacked Sites Section - Aparece abajo después del scan solo si no hay AGI */}
+      {hasScanned && !agiDetected && (
         <div className="min-h-screen">
           <StackedSites sources={newsData} />
         </div>
