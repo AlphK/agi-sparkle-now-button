@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
 import EmbeddedCoverFlow from '@/components/EmbeddedCoverFlow';
 import LatestAGINews from '@/components/LatestAGINews';
-import AIInsightsReport from '@/components/AIInsightsReport';
 import AGIDetectionAnimation from '@/components/AGIDetectionAnimation';
 import SecurityAlert from '@/components/SecurityAlert';
 
@@ -18,14 +17,11 @@ interface NewsItem {
   url: string;
   relevance: 'critical' | 'high' | 'medium' | 'low';
   category: string;
-}
-
-interface AIInsights {
-  summary: string;
-  keyTrends: string[];
-  riskAssessment: string;
-  recommendations: string[];
-  agiProbability: number;
+  aiAnalysis?: {
+    reasoning: string;
+    keyInsights: string[];
+    agiProbability: number;
+  };
 }
 
 const Index = () => {
@@ -36,8 +32,6 @@ const Index = () => {
   const [testMode, setTestMode] = useState(false);
   const [useAI, setUseAI] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [aiInsights, setAiInsights] = useState<AIInsights | undefined>();
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const { toast } = useToast();
 
   // Timer para mostrar el prompt después de 30 segundos
@@ -51,6 +45,7 @@ const Index = () => {
     return () => clearTimeout(timer);
   }, [isScanning, hasScanned]);
 
+  // Ocultar prompt cuando se inicia el scan
   useEffect(() => {
     if (isScanning) {
       setShowPrompt(false);
@@ -63,7 +58,6 @@ const Index = () => {
     setHasScanned(false);
     setAgiDetected(false);
     setShowPrompt(false);
-    setAiInsights(undefined);
     
     try {
       console.log('🔍 Iniciando búsqueda AGI...');
@@ -71,18 +65,9 @@ const Index = () => {
       
       let scanResult;
       if (useAI) {
-        console.log('🧠 Modo IA: Búsqueda + Reporte Inteligente...');
+        console.log('🧠 Usando IA para búsqueda inteligente...');
         scanResult = await dataService.performIntelligentAGIScan();
         setNewsData(scanResult.newsWithAnalysis);
-        
-        if (scanResult.aiInsights) {
-          setIsGeneratingReport(true);
-          // Simular tiempo de procesamiento del reporte
-          setTimeout(() => {
-            setAiInsights(scanResult.aiInsights);
-            setIsGeneratingReport(false);
-          }, 2000);
-        }
         
         toast({
           title: "🧠 Análisis IA Completado",
@@ -98,7 +83,7 @@ const Index = () => {
           dataService.fetchArXivPapers(),
           dataService.fetchRedditMLPosts(),
           dataService.fetchHackerNewsPosts(),
-          dataService.fetchExpandedRSSFeeds()
+          dataService.fetchRSSFeeds()
         ]);
         
         const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
@@ -109,6 +94,7 @@ const Index = () => {
         
         setNewsData(allNews);
         
+        // Análisis básico de AGI con keywords
         const criticalItems = allNews.filter(item => item.relevance === 'critical');
         const agiKeywords = [
           'agi', 'artificial general intelligence', 'superintelligence', 
@@ -149,14 +135,16 @@ const Index = () => {
   const getButtonContent = () => {
     if (isScanning) {
       return (
-        <div className="flex space-x-1">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="w-3 h-3 bg-white rounded-full animate-bounce"
-              style={{ animationDelay: `${i * 0.2}s` }}
-            ></div>
-          ))}
+        <div className="flex items-center space-x-2">
+          <div className="flex space-x-1">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="w-3 h-3 bg-white rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              ></div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -183,22 +171,17 @@ const Index = () => {
         )}
 
         <div className="absolute top-4 right-4 flex flex-col space-y-3">
-          <div className="flex items-center space-x-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl shadow-sm">
-            <span className="text-sm font-medium text-gray-700">Test Mode</span>
-            <Switch 
-              checked={testMode} 
-              onCheckedChange={setTestMode}
-              className="data-[state=checked]:bg-green-500"
-            />
+          <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg shadow-sm">
+            <span className="text-sm font-medium text-gray-700">Test</span>
+            <Switch checked={testMode} onCheckedChange={setTestMode} />
           </div>
           
-          <div className="flex items-center space-x-3 bg-blue-50 border border-blue-200 px-4 py-3 rounded-xl shadow-sm">
-            <Brain className="w-5 h-5 text-blue-600" />
-            <span className="text-sm font-medium text-blue-700">AI Report</span>
+          <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg shadow-sm">
+            <Brain className="w-4 h-4 text-blue-600" />
+            <span className="text-sm font-medium text-blue-700">IA</span>
             <Switch 
               checked={useAI} 
               onCheckedChange={setUseAI}
-              className="data-[state=checked]:bg-blue-500"
             />
           </div>
         </div>
@@ -235,24 +218,13 @@ const Index = () => {
         {useAI && (
           <div className="mt-6 flex items-center space-x-2 text-blue-600 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
             <Shield className="w-5 h-5" />
-            <span className="text-sm font-medium">Detección + Reporte IA Activo</span>
+            <span className="text-sm font-medium">Detección IA Segura Activa</span>
           </div>
         )}
       </div>
 
       {/* Carrusel de sitios de AI */}
       <EmbeddedCoverFlow />
-
-      {/* Reporte de IA */}
-      {useAI && hasScanned && (
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <AIInsightsReport 
-            newsData={newsData}
-            aiInsights={aiInsights}
-            isLoading={isGeneratingReport}
-          />
-        </div>
-      )}
 
       {/* Sección de análisis AGI */}
       {hasScanned && newsData.length > 0 && (

@@ -10,6 +10,7 @@ export class OpenAIService {
   private model: string;
 
   constructor() {
+    // Usando el proxy que mencionaste
     this.proxyUrl = 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
     this.authToken = '0204';
     this.model = 'gpt-4o-mini';
@@ -46,13 +47,14 @@ Responde con JSON:
 }`;
 
     try {
-      console.log('🤖 Enviando petición a OpenAI proxy...');
+      console.log('🤖 Haciendo petición al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Origin': window.location.origin
         },
         body: JSON.stringify({
           model: this.model,
@@ -62,27 +64,25 @@ Responde con JSON:
         })
       });
 
-      console.log('📊 Estado respuesta OpenAI:', response.status);
+      console.log('📊 Estado de respuesta OpenAI:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Error OpenAI:', errorText);
-        throw new Error(`Error del proxy: ${response.statusText}`);
+        console.error('❌ Respuesta de error:', errorText);
+        throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('✅ Respuesta OpenAI:', data);
+      console.log('✅ Respuesta OpenAI recibida:', data);
       
       if (!data.choices?.[0]?.message?.content) {
-        console.error('❌ Estructura de respuesta inválida:', data);
         throw new Error('Estructura de respuesta inválida');
       }
 
       let parsedContent;
       try {
         parsedContent = JSON.parse(data.choices[0].message.content);
-      } catch (parseError) {
-        console.error('❌ Error parsing JSON:', data.choices[0].message.content);
+      } catch {
         throw new Error('JSON inválido en respuesta');
       }
 
@@ -95,7 +95,7 @@ Responde con JSON:
         keyInsights: validatedAnalysis.keyInsights.map(insight => sanitizeContent.text(insight))
       };
     } catch (error) {
-      console.error('❌ Análisis OpenAI falló completamente:', error);
+      console.error('❌ Análisis OpenAI falló:', error);
       return this.fallbackAnalysis(sanitizedTitle);
     }
   }
@@ -140,13 +140,14 @@ Responde con JSON:
 }`;
 
     try {
-      console.log('🧠 Iniciando análisis batch con OpenAI...');
+      console.log('🧠 Haciendo análisis batch al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Origin': window.location.origin
         },
         body: JSON.stringify({
           model: this.model,
@@ -156,27 +157,25 @@ Responde con JSON:
         })
       });
 
-      console.log('📊 Estado análisis batch:', response.status);
+      console.log('📊 Estado de respuesta análisis batch:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Error batch OpenAI:', errorText);
-        throw new Error(`Error del proxy: ${response.statusText}`);
+        console.error('❌ Error respuesta análisis batch:', errorText);
+        throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('✅ Respuesta batch OpenAI:', data);
+      console.log('✅ Respuesta análisis batch OpenAI:', data);
       
       if (!data.choices?.[0]?.message?.content) {
-        console.error('❌ Estructura inválida batch:', data);
         throw new Error('Estructura de respuesta inválida');
       }
 
       let parsedContent;
       try {
         parsedContent = JSON.parse(data.choices[0].message.content);
-      } catch (parseError) {
-        console.error('❌ Error parsing batch JSON:', data.choices[0].message.content);
+      } catch {
         throw new Error('JSON inválido en respuesta');
       }
 
@@ -199,7 +198,7 @@ Responde con JSON:
         }
       };
     } catch (error) {
-      console.error('❌ Análisis batch falló completamente:', error);
+      console.error('❌ Análisis batch falló:', error);
       return this.fallbackBatchAnalysis(sanitizedItems);
     }
   }
