@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Loader2, Zap, Brain, Sparkles, Key } from 'lucide-react';
+import { Loader2, Zap, Brain, Sparkles, Key, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -8,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
 import CoverFlowNews from '@/components/CoverFlowNews';
 import AGIDetectionAnimation from '@/components/AGIDetectionAnimation';
+import SecurityAlert from '@/components/SecurityAlert';
 
 interface NewsItem {
   title: string;
@@ -33,7 +33,22 @@ const Index = () => {
   const [openAIKey, setOpenAIKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [usingAI, setUsingAI] = useState(false);
+  const [keyError, setKeyError] = useState('');
   const { toast } = useToast();
+
+  const validateAPIKey = (key: string): boolean => {
+    if (!key.trim()) return false;
+    if (!key.startsWith('sk-')) {
+      setKeyError('API key must start with "sk-"');
+      return false;
+    }
+    if (key.length < 45) {
+      setKeyError('API key appears to be too short');
+      return false;
+    }
+    setKeyError('');
+    return true;
+  };
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -42,15 +57,29 @@ const Index = () => {
     try {
       const dataService = RealDataService.getInstance(toast);
       
-      // Set OpenAI key if provided
+      // Validate and set OpenAI key if provided
       if (openAIKey.trim()) {
-        dataService.setOpenAIKey(openAIKey.trim());
-        setUsingAI(true);
+        if (!validateAPIKey(openAIKey.trim())) {
+          toast({
+            title: "❌ Invalid API Key",
+            description: keyError || "Please provide a valid OpenAI API key",
+            variant: "destructive",
+          });
+          setIsScanning(false);
+          return;
+        }
+        
+        try {
+          dataService.setOpenAIKey(openAIKey.trim());
+          setUsingAI(true);
+        } catch (error) {
+          setIsScanning(false);
+          return;
+        }
       }
 
       let scanResult;
       if (usingAI && openAIKey.trim()) {
-        // Use intelligent AI-powered scan
         scanResult = await dataService.performIntelligentAGIScan();
         setNewsData(scanResult.newsWithAnalysis);
         
@@ -59,7 +88,6 @@ const Index = () => {
           description: `${scanResult.reasoning}`,
         });
       } else {
-        // Use basic scan
         const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
           dataService.fetchArXivPapers(),
           dataService.fetchRedditMLPosts(),
@@ -86,7 +114,6 @@ const Index = () => {
       } else if (scanResult.detected) {
         setTimeout(() => setAgiDetected(true), 1000);
       } else {
-        // Show scroll message for 4 seconds
         setShowScrollMessage(true);
         setTimeout(() => setShowScrollMessage(false), 4000);
       }
@@ -95,7 +122,7 @@ const Index = () => {
       console.error('Error scanning:', error);
       toast({
         title: "❌ Error",
-        description: "No se pudo conectar a las fuentes",
+        description: "Failed to connect to sources. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -142,6 +169,17 @@ const Index = () => {
 
       {/* Header Section */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        {/* Security Notice */}
+        {showKeyInput && (
+          <div className="absolute top-16 left-4 right-4 max-w-md mx-auto">
+            <SecurityAlert
+              type="warning"
+              title="Security Notice"
+              message="API keys are processed securely and not stored. For production use, consider using environment variables."
+            />
+          </div>
+        )}
+
         {/* Controls */}
         <div className="absolute top-4 right-4 flex flex-col space-y-2">
           {/* Test Mode Toggle */}
@@ -164,18 +202,24 @@ const Index = () => {
           {showKeyInput && (
             <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
               <div className="flex items-center space-x-2 mb-2">
-                <Key className="w-4 h-4 text-green-600" />
+                <Shield className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-medium">OpenAI API Key</span>
               </div>
               <Input
                 type="password"
                 placeholder="sk-..."
                 value={openAIKey}
-                onChange={(e) => setOpenAIKey(e.target.value)}
-                className="text-xs"
+                onChange={(e) => {
+                  setOpenAIKey(e.target.value);
+                  setKeyError('');
+                }}
+                className={`text-xs ${keyError ? 'border-red-500' : ''}`}
               />
+              {keyError && (
+                <p className="text-xs text-red-500 mt-1">{keyError}</p>
+              )}
               <p className="text-xs text-gray-500 mt-1">
-                For intelligent AGI detection
+                Secure AI-powered AGI detection
               </p>
             </div>
           )}
@@ -199,8 +243,8 @@ const Index = () => {
         {/* Status Indicator */}
         {usingAI && openAIKey && (
           <div className="mt-4 flex items-center space-x-2 text-blue-600">
-            <Brain className="w-5 h-5" />
-            <span className="text-sm font-medium">AI-Enhanced Detection Active</span>
+            <Shield className="w-5 h-5" />
+            <span className="text-sm font-medium">Secure AI Detection Active</span>
           </div>
         )}
 

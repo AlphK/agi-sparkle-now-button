@@ -1,26 +1,11 @@
+import { z } from 'zod';
+import { AnalysisResultSchema, BatchAnalysisResultSchema, type AnalysisResult, type BatchAnalysisResult } from '@/schemas/openai';
+import { sanitizeContent } from '@/utils/sanitizer';
+import { secureApiClient } from '@/utils/secureApiClient';
 
 interface OpenAIConfig {
   apiKey: string;
   model?: string;
-}
-
-interface AnalysisResult {
-  relevance: 'critical' | 'high' | 'medium' | 'low';
-  agiProbability: number;
-  reasoning: string;
-  keyInsights: string[];
-}
-
-interface BatchAnalysisResult {
-  items: Array<{
-    title: string;
-    analysis: AnalysisResult;
-  }>;
-  overallAgiDetection: {
-    detected: boolean;
-    confidence: number;
-    reasoning: string;
-  };
 }
 
 export class OpenAIService {
@@ -29,6 +14,10 @@ export class OpenAIService {
   private model: string;
 
   constructor(config: OpenAIConfig) {
+    // Validate API key format
+    if (!config.apiKey || !config.apiKey.startsWith('sk-')) {
+      throw new Error('Invalid OpenAI API key format');
+    }
     this.apiKey = config.apiKey;
     this.model = config.model || 'gpt-4.1-mini-2025-04-14';
   }
@@ -41,10 +30,14 @@ export class OpenAIService {
   }
 
   async analyzeNewsItem(title: string, source: string): Promise<AnalysisResult> {
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeContent.text(title);
+    const sanitizedSource = sanitizeContent.text(source);
+
     const prompt = `Analyze this AI/tech news headline for AGI relevance:
 
-Title: "${title}"
-Source: ${source}
+Title: "${sanitizedTitle}"
+Source: ${sanitizedSource}
 
 Evaluate on a scale where:
 - critical: Breakthrough AGI achievements, consciousness claims, human-level AI
@@ -61,7 +54,7 @@ Respond with JSON:
 }`;
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await secureApiClient.secureRequest('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -72,31 +65,48 @@ Respond with JSON:
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 300
-        })
+        }),
+        timeout: 30000
       });
 
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+      const data = await response.json();
+      
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid response structure');
       }
 
-      const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      // Parse and validate JSON response
+      let parsedContent;
+      try {
+        parsedContent = JSON.parse(data.choices[0].message.content);
+      } catch {
+        throw new Error('Invalid JSON in response');
+      }
+
+      // Validate with Zod schema
+      const validatedAnalysis = AnalysisResultSchema.parse(parsedContent);
       
+      // Sanitize the validated content
       return {
-        relevance: analysis.relevance,
-        agiProbability: analysis.agiProbability,
-        reasoning: analysis.reasoning,
-        keyInsights: analysis.keyInsights || []
+        relevance: validatedAnalysis.relevance,
+        agiProbability: validatedAnalysis.agiProbability,
+        reasoning: sanitizeContent.text(validatedAnalysis.reasoning),
+        keyInsights: validatedAnalysis.keyInsights.map(insight => sanitizeContent.text(insight))
       };
     } catch (error) {
       console.error('OpenAI analysis failed:', error);
-      // Fallback to basic keyword analysis
-      return this.fallbackAnalysis(title);
+      return this.fallbackAnalysis(sanitizedTitle);
     }
   }
 
   async batchAnalyzeNews(newsItems: Array<{ title: string; source: string }>): Promise<BatchAnalysisResult> {
-    const titles = newsItems.map(item => `- ${item.title} (${item.source})`).join('\n');
+    // Sanitize all inputs
+    const sanitizedItems = newsItems.map(item => ({
+      title: sanitizeContent.text(item.title),
+      source: sanitizeContent.text(item.source)
+    }));
+
+    const titles = sanitizedItems.map(item => `- ${item.title} (${item.source})`).join('\n');
     
     const prompt = `Analyze these AI news headlines for AGI detection:
 
@@ -130,30 +140,57 @@ Respond with JSON:
 }`;
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await secureApiClient.secureRequest('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14', // Use more capable model for batch analysis
+          model: 'gpt-4.1-2025-04-14',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.2,
           max_tokens: 2000
-        })
+        }),
+        timeout: 45000
       });
 
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+      const data = await response.json();
+      
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid response structure');
       }
 
-      const data = await response.json();
-      return JSON.parse(data.choices[0].message.content);
+      let parsedContent;
+      try {
+        parsedContent = JSON.parse(data.choices[0].message.content);
+      } catch {
+        throw new Error('Invalid JSON in response');
+      }
+
+      // Validate with Zod schema
+      const validatedResult = BatchAnalysisResultSchema.parse(parsedContent);
+      
+      // Sanitize all content in the result
+      return {
+        items: validatedResult.items.map(item => ({
+          title: sanitizeContent.text(item.title),
+          analysis: {
+            relevance: item.analysis.relevance,
+            agiProbability: item.analysis.agiProbability,
+            reasoning: sanitizeContent.text(item.analysis.reasoning),
+            keyInsights: item.analysis.keyInsights.map(insight => sanitizeContent.text(insight))
+          }
+        })),
+        overallAgiDetection: {
+          detected: validatedResult.overallAgiDetection.detected,
+          confidence: validatedResult.overallAgiDetection.confidence,
+          reasoning: sanitizeContent.text(validatedResult.overallAgiDetection.reasoning)
+        }
+      };
     } catch (error) {
       console.error('Batch analysis failed:', error);
-      // Fallback to individual analysis
-      return this.fallbackBatchAnalysis(newsItems);
+      return this.fallbackBatchAnalysis(sanitizedItems);
     }
   }
 

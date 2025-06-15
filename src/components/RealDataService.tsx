@@ -1,5 +1,7 @@
 import { useToast } from '@/hooks/use-toast';
 import { OpenAIService } from '@/services/OpenAIService';
+import { sanitizeContent } from '@/utils/sanitizer';
+import { secureApiClient } from '@/utils/secureApiClient';
 
 interface NewsItem {
   title: string;
@@ -32,14 +34,30 @@ export class RealDataService {
   }
 
   setOpenAIKey(apiKey: string) {
-    this.openAIService = OpenAIService.getInstance({ apiKey });
+    try {
+      this.openAIService = OpenAIService.getInstance({ apiKey });
+    } catch (error) {
+      this.toast({
+        title: "❌ Invalid API Key",
+        description: "Please provide a valid OpenAI API key",
+        variant: "destructive",
+      });
+      throw error;
+    }
   }
 
   async fetchArXivPapers(): Promise<NewsItem[]> {
     try {
-      const response = await fetch(
-        'https://export.arxiv.org/api/query?search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&start=0&max_results=15&sortBy=submittedDate&sortOrder=descending'
+      const response = await secureApiClient.secureRequest(
+        'https://export.arxiv.org/api/query?search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&start=0&max_results=15&sortBy=submittedDate&sortOrder=descending',
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/atom+xml'
+          }
+        }
       );
+      
       const text = await response.text();
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, 'text/xml');
@@ -52,12 +70,18 @@ export class RealDataService {
         const updated = entry.getElementsByTagName('updated')[0]?.textContent || '';
         const id = entry.getElementsByTagName('id')[0]?.textContent || '';
         
+        // Sanitize content before processing
+        const sanitized = sanitizeContent.newsItem({
+          title,
+          source: 'ArXiv'
+        });
+        
         papers.push({
-          title: title.replace(/\s+/g, ' ').trim(),
-          source: 'ArXiv',
+          title: sanitized.title.replace(/\s+/g, ' ').trim(),
+          source: sanitized.source,
           time: this.getTimeAgo(new Date(updated)),
-          url: id,
-          relevance: this.determineRelevance(title),
+          url: sanitizeContent.url(id),
+          relevance: this.determineRelevance(sanitized.title),
           category: 'RESEARCH'
         });
       }
@@ -70,37 +94,51 @@ export class RealDataService {
 
   async fetchRedditMLPosts(): Promise<NewsItem[]> {
     try {
-      const [mlPosts, singularityPosts] = await Promise.all([
-        fetch('https://www.reddit.com/r/MachineLearning/hot.json?limit=8', {
-          headers: { 'User-Agent': 'AGI-Detector/1.0' }
+      const [mlResponse, singularityResponse] = await Promise.all([
+        secureApiClient.secureRequest('https://www.reddit.com/r/MachineLearning/hot.json?limit=8', {
+          method: 'GET',
+          headers: { 'User-Agent': 'AGI-Detector-Secure/1.0' }
         }),
-        fetch('https://www.reddit.com/r/singularity/hot.json?limit=5', {
-          headers: { 'User-Agent': 'AGI-Detector/1.0' }
+        secureApiClient.secureRequest('https://www.reddit.com/r/singularity/hot.json?limit=5', {
+          method: 'GET',
+          headers: { 'User-Agent': 'AGI-Detector-Secure/1.0' }
         })
       ]);
 
       const [mlData, singularityData] = await Promise.all([
-        mlPosts.json(),
-        singularityPosts.json()
+        mlResponse.json(),
+        singularityResponse.json()
       ]);
       
       const posts: NewsItem[] = [
-        ...mlData.data.children.slice(0, 5).map((post: any) => ({
-          title: post.data.title,
-          source: 'Reddit r/MachineLearning',
-          time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
-          url: `https://reddit.com${post.data.permalink}`,
-          relevance: this.determineRelevance(post.data.title),
-          category: 'COMMUNITY'
-        })),
-        ...singularityData.data.children.slice(0, 3).map((post: any) => ({
-          title: post.data.title,
-          source: 'Reddit r/singularity',
-          time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
-          url: `https://reddit.com${post.data.permalink}`,
-          relevance: this.determineRelevance(post.data.title),
-          category: 'FUTURISM'
-        }))
+        ...mlData.data.children.slice(0, 5).map((post: any) => {
+          const sanitized = sanitizeContent.newsItem({
+            title: post.data.title,
+            source: 'Reddit r/MachineLearning'
+          });
+          return {
+            title: sanitized.title,
+            source: sanitized.source,
+            time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
+            url: sanitizeContent.url(`https://reddit.com${post.data.permalink}`),
+            relevance: this.determineRelevance(sanitized.title),
+            category: 'COMMUNITY'
+          };
+        }),
+        ...singularityData.data.children.slice(0, 3).map((post: any) => {
+          const sanitized = sanitizeContent.newsItem({
+            title: post.data.title,
+            source: 'Reddit r/singularity'
+          });
+          return {
+            title: sanitized.title,
+            source: sanitized.source,
+            time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
+            url: sanitizeContent.url(`https://reddit.com${post.data.permalink}`),
+            relevance: this.determineRelevance(sanitized.title),
+            category: 'FUTURISM'
+          };
+        })
       ];
       
       return posts;
@@ -112,22 +150,33 @@ export class RealDataService {
 
   async fetchHackerNewsPosts(): Promise<NewsItem[]> {
     try {
-      const response = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+      const response = await secureApiClient.secureRequest('https://hacker-news.firebaseio.com/v0/topstories.json', {
+        method: 'GET',
+        headers: {}
+      });
       const storyIds = await response.json();
       
       const stories: NewsItem[] = [];
       for (let i = 0; i < Math.min(storyIds.length, 30); i++) {
         try {
-          const storyResponse = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyIds[i]}.json`);
+          const storyResponse = await secureApiClient.secureRequest(`https://hacker-news.firebaseio.com/v0/item/${storyIds[i]}.json`, {
+            method: 'GET',
+            headers: {}
+          });
           const story = await storyResponse.json();
           
           if (story.title && this.isAIRelated(story.title)) {
-            stories.push({
+            const sanitized = sanitizeContent.newsItem({
               title: story.title,
-              source: 'Hacker News',
+              source: 'Hacker News'
+            });
+            
+            stories.push({
+              title: sanitized.title,
+              source: sanitized.source,
               time: this.getTimeAgo(new Date(story.time * 1000)),
-              url: story.url || `https://news.ycombinator.com/item?id=${story.id}`,
-              relevance: this.determineRelevance(story.title),
+              url: sanitizeContent.url(story.url || `https://news.ycombinator.com/item?id=${story.id}`),
+              relevance: this.determineRelevance(sanitized.title),
               category: 'TECH'
             });
             
@@ -161,9 +210,11 @@ export class RealDataService {
 
     for (const feed of rssFeeds) {
       try {
-        // Usar un proxy CORS para acceder a los feeds RSS
         const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`;
-        const response = await fetch(proxyUrl);
+        const response = await secureApiClient.secureRequest(proxyUrl, {
+          method: 'GET',
+          headers: {}
+        });
         const data = await response.json();
         
         if (data.contents) {
@@ -179,12 +230,17 @@ export class RealDataService {
             const pubDate = item.querySelector('pubDate, published')?.textContent || '';
             
             if (title && this.isAIRelated(title)) {
+              const sanitized = sanitizeContent.newsItem({
+                title,
+                source: feed.source
+              });
+              
               allFeedItems.push({
-                title: title.replace(/\s+/g, ' ').trim(),
-                source: feed.source,
+                title: sanitized.title.replace(/\s+/g, ' ').trim(),
+                source: sanitized.source,
                 time: pubDate ? this.getTimeAgo(new Date(pubDate)) : 'Recent',
-                url: link,
-                relevance: this.determineRelevance(title),
+                url: sanitizeContent.url(link),
+                relevance: this.determineRelevance(sanitized.title),
                 category: feed.category
               });
             }
@@ -192,11 +248,10 @@ export class RealDataService {
         }
       } catch (error) {
         console.error(`Error fetching RSS feed from ${feed.source}:`, error);
-        // Continue with other feeds even if one fails
       }
     }
 
-    return allFeedItems.slice(0, 10); // Limit total RSS items
+    return allFeedItems.slice(0, 10);
   }
 
   private isAIRelated(title: string): boolean {
@@ -265,7 +320,6 @@ export class RealDataService {
       description: "Using OpenAI to analyze content for AGI indicators...",
     });
 
-    // Fetch all news sources
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
       this.fetchRedditMLPosts(),
@@ -276,12 +330,10 @@ export class RealDataService {
     const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
 
     if (!this.openAIService) {
-      // Fallback to basic analysis
       return this.performBasicAGIScan(allNews);
     }
 
     try {
-      // Use OpenAI for intelligent analysis
       const analysisInput = allNews.map(item => ({
         title: item.title,
         source: item.source
@@ -289,7 +341,6 @@ export class RealDataService {
 
       const batchAnalysis = await this.openAIService.batchAnalyzeNews(analysisInput);
 
-      // Update news items with AI analysis
       const newsWithAnalysis = allNews.map((item, index) => {
         const analysis = batchAnalysis.items[index]?.analysis;
         return {
@@ -303,7 +354,6 @@ export class RealDataService {
         };
       });
 
-      // Sort by AI-determined relevance and probability
       newsWithAnalysis.sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         const aRelevance = relevanceOrder[a.relevance];
@@ -313,7 +363,6 @@ export class RealDataService {
           return aRelevance - bRelevance;
         }
         
-        // If same relevance, sort by AGI probability
         const aProb = a.aiAnalysis?.agiProbability || 0;
         const bProb = b.aiAnalysis?.agiProbability || 0;
         return bProb - aProb;
@@ -361,7 +410,6 @@ export class RealDataService {
   }
 
   async performAGIScan(): Promise<{ detected: boolean; confidence: number; sources: string[] }> {
-    // Keep existing method for backward compatibility
     const result = await this.performIntelligentAGIScan();
     return {
       detected: result.detected,
