@@ -32,13 +32,14 @@ const Index = () => {
       const dataService = RealDataService.getInstance(toast);
       
       // Fetch all data in parallel
-      const [arxivPapers, redditPosts, hnPosts] = await Promise.all([
+      const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
         dataService.fetchArXivPapers(),
         dataService.fetchRedditMLPosts(),
-        dataService.fetchHackerNewsPosts()
+        dataService.fetchHackerNewsPosts(),
+        dataService.fetchRSSFeeds()
       ]);
       
-      const allNews = [...arxivPapers, ...redditPosts, ...hnPosts]
+      const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
         .sort((a, b) => {
           const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
           return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
@@ -82,8 +83,12 @@ const Index = () => {
 
   const getButtonText = () => {
     if (isScanning) return "SCANNING...";
+    return "AGI";
+  };
+
+  const getStatusText = () => {
     if (hasScanned && !agiDetected) return "Not yet";
-    return "Not yet";
+    return "";
   };
 
   return (
@@ -122,6 +127,23 @@ const Index = () => {
             )}
           </div>
         </Button>
+
+        {/* Status Text */}
+        {getStatusText() && (
+          <div className="mt-6 text-2xl font-bold text-gray-600">
+            {getStatusText()}
+          </div>
+        )}
+
+        {/* Scroll hint when data is available */}
+        {hasScanned && !agiDetected && (
+          <div className="mt-8 text-center animate-bounce">
+            <p className="text-gray-500 mb-2">Latest AI news below ↓</p>
+            <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center">
+              <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stacked Sites Section - Aparece abajo después del scan solo si no hay AGI */}

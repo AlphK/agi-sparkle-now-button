@@ -28,7 +28,7 @@ export class RealDataService {
   async fetchArXivPapers(): Promise<NewsItem[]> {
     try {
       const response = await fetch(
-        'https://export.arxiv.org/api/query?search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending'
+        'https://export.arxiv.org/api/query?search_query=cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CL&start=0&max_results=15&sortBy=submittedDate&sortOrder=descending'
       );
       const text = await response.text();
       const parser = new DOMParser();
@@ -36,7 +36,7 @@ export class RealDataService {
       const entries = xmlDoc.getElementsByTagName('entry');
       
       const papers: NewsItem[] = [];
-      for (let i = 0; i < Math.min(entries.length, 5); i++) {
+      for (let i = 0; i < Math.min(entries.length, 8); i++) {
         const entry = entries[i];
         const title = entry.getElementsByTagName('title')[0]?.textContent || '';
         const updated = entry.getElementsByTagName('updated')[0]?.textContent || '';
@@ -60,21 +60,38 @@ export class RealDataService {
 
   async fetchRedditMLPosts(): Promise<NewsItem[]> {
     try {
-      const response = await fetch('https://www.reddit.com/r/MachineLearning/hot.json?limit=10', {
-        headers: {
-          'User-Agent': 'AGI-Detector/1.0'
-        }
-      });
-      const data = await response.json();
+      const [mlPosts, singularityPosts] = await Promise.all([
+        fetch('https://www.reddit.com/r/MachineLearning/hot.json?limit=8', {
+          headers: { 'User-Agent': 'AGI-Detector/1.0' }
+        }),
+        fetch('https://www.reddit.com/r/singularity/hot.json?limit=5', {
+          headers: { 'User-Agent': 'AGI-Detector/1.0' }
+        })
+      ]);
+
+      const [mlData, singularityData] = await Promise.all([
+        mlPosts.json(),
+        singularityPosts.json()
+      ]);
       
-      const posts: NewsItem[] = data.data.children.slice(0, 5).map((post: any) => ({
-        title: post.data.title,
-        source: 'Reddit r/MachineLearning',
-        time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
-        url: `https://reddit.com${post.data.permalink}`,
-        relevance: this.determineRelevance(post.data.title),
-        category: 'COMMUNITY'
-      }));
+      const posts: NewsItem[] = [
+        ...mlData.data.children.slice(0, 5).map((post: any) => ({
+          title: post.data.title,
+          source: 'Reddit r/MachineLearning',
+          time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
+          url: `https://reddit.com${post.data.permalink}`,
+          relevance: this.determineRelevance(post.data.title),
+          category: 'COMMUNITY'
+        })),
+        ...singularityData.data.children.slice(0, 3).map((post: any) => ({
+          title: post.data.title,
+          source: 'Reddit r/singularity',
+          time: this.getTimeAgo(new Date(post.data.created_utc * 1000)),
+          url: `https://reddit.com${post.data.permalink}`,
+          relevance: this.determineRelevance(post.data.title),
+          category: 'FUTURISM'
+        }))
+      ];
       
       return posts;
     } catch (error) {
@@ -89,7 +106,7 @@ export class RealDataService {
       const storyIds = await response.json();
       
       const stories: NewsItem[] = [];
-      for (let i = 0; i < Math.min(storyIds.length, 20); i++) {
+      for (let i = 0; i < Math.min(storyIds.length, 30); i++) {
         try {
           const storyResponse = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyIds[i]}.json`);
           const story = await storyResponse.json();
@@ -104,7 +121,7 @@ export class RealDataService {
               category: 'TECH'
             });
             
-            if (stories.length >= 3) break;
+            if (stories.length >= 5) break;
           }
         } catch (error) {
           console.error('Error fetching HN story:', error);
@@ -118,11 +135,68 @@ export class RealDataService {
     }
   }
 
+  async fetchRSSFeeds(): Promise<NewsItem[]> {
+    const rssFeeds = [
+      { url: 'https://openai.com/blog/rss/', source: 'OpenAI', category: 'INDUSTRY' },
+      { url: 'https://ai.googleblog.com/feeds/posts/default', source: 'Google DeepMind', category: 'RESEARCH' },
+      { url: 'https://blogs.microsoft.com/ai/feed/', source: 'Microsoft AI', category: 'INDUSTRY' },
+      { url: 'https://blogs.nvidia.com/blog/category/ai/feed/', source: 'NVIDIA AI', category: 'HARDWARE' },
+      { url: 'https://importai.substack.com/feed', source: 'Import AI', category: 'ANALYSIS' },
+      { url: 'https://garymarcus.substack.com/feed', source: 'Gary Marcus', category: 'ANALYSIS' },
+      { url: 'https://towardsdatascience.com/feed', source: 'Towards Data Science', category: 'COMMUNITY' },
+      { url: 'https://www.technologyreview.com/feed/', source: 'MIT Technology Review', category: 'TECH' }
+    ];
+
+    const allFeedItems: NewsItem[] = [];
+
+    for (const feed of rssFeeds) {
+      try {
+        // Usar un proxy CORS para acceder a los feeds RSS
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        
+        if (data.contents) {
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(data.contents, 'text/xml');
+          const items = xmlDoc.querySelectorAll('item, entry');
+          
+          for (let i = 0; i < Math.min(items.length, 3); i++) {
+            const item = items[i];
+            const title = item.querySelector('title')?.textContent || '';
+            const link = item.querySelector('link')?.getAttribute('href') || 
+                        item.querySelector('link')?.textContent || '';
+            const pubDate = item.querySelector('pubDate, published')?.textContent || '';
+            
+            if (title && this.isAIRelated(title)) {
+              allFeedItems.push({
+                title: title.replace(/\s+/g, ' ').trim(),
+                source: feed.source,
+                time: pubDate ? this.getTimeAgo(new Date(pubDate)) : 'Recent',
+                url: link,
+                relevance: this.determineRelevance(title),
+                category: feed.category
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching RSS feed from ${feed.source}:`, error);
+        // Continue with other feeds even if one fails
+      }
+    }
+
+    return allFeedItems.slice(0, 10); // Limit total RSS items
+  }
+
   private isAIRelated(title: string): boolean {
     const aiKeywords = [
       'ai', 'artificial intelligence', 'machine learning', 'deep learning',
       'neural network', 'gpt', 'llm', 'chatgpt', 'openai', 'anthropic',
-      'deepmind', 'transformer', 'agi', 'automation', 'robot'
+      'deepmind', 'transformer', 'agi', 'automation', 'robot', 'claude',
+      'gemini', 'reasoning', 'autonomous', 'consciousness', 'sentient',
+      'benchmark', 'evaluation', 'chatbot', 'language model', 'ai safety',
+      'alignment', 'superintelligence', 'capabilities', 'emergence'
     ];
     
     return aiKeywords.some(keyword => 
@@ -131,8 +205,16 @@ export class RealDataService {
   }
 
   private determineRelevance(title: string): 'critical' | 'high' | 'medium' | 'low' {
-    const criticalKeywords = ['agi', 'artificial general intelligence', 'consciousness', 'sentient', 'breakthrough'];
-    const highKeywords = ['gpt-5', 'gpt-4', 'claude', 'gemini', 'reasoning', 'autonomous'];
+    const criticalKeywords = [
+      'agi', 'artificial general intelligence', 'consciousness', 'sentient', 
+      'breakthrough', 'superintelligence', 'human-level', 'passes turing test',
+      'self-improving', 'recursive improvement', 'intelligence explosion'
+    ];
+    const highKeywords = [
+      'gpt-5', 'gpt-4', 'claude', 'gemini', 'reasoning', 'autonomous',
+      'benchmark', 'milestone', 'evaluation', 'capabilities', 'frontier',
+      'multimodal', 'robotics', 'embodied', 'planning', 'tool use'
+    ];
     
     const titleLower = title.toLowerCase();
     
@@ -163,17 +245,18 @@ export class RealDataService {
 
   async performAGIScan(): Promise<{ detected: boolean; confidence: number; sources: string[] }> {
     this.toast({
-      title: "🔍 Conectando a fuentes reales",
-      description: "ArXiv, Reddit, Hacker News...",
+      title: "🔍 Scanning multiple sources",
+      description: "ArXiv, Reddit, Hacker News, RSS feeds...",
     });
 
-    const [arxivPapers, redditPosts, hnPosts] = await Promise.all([
+    const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
       this.fetchRedditMLPosts(),
-      this.fetchHackerNewsPosts()
+      this.fetchHackerNewsPosts(),
+      this.fetchRSSFeeds()
     ]);
 
-    const allNews = [...arxivPapers, ...redditPosts, ...hnPosts];
+    const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
     const criticalNews = allNews.filter(item => item.relevance === 'critical');
     
     // Análisis simple de detección de AGI
@@ -187,7 +270,7 @@ export class RealDataService {
     return {
       detected: confidence > 80,
       confidence,
-      sources: ['ArXiv', 'Reddit', 'Hacker News']
+      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'DeepMind', 'RSS Feeds']
     };
   }
 }
