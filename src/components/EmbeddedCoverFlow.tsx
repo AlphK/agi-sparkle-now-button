@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
@@ -7,6 +6,7 @@ interface NewsSource {
   url: string;
   category: string;
   originalUrl?: string;
+  ampUrl?: string;
 }
 
 interface ContentState {
@@ -18,34 +18,34 @@ interface ContentState {
 
 const VERIFIED_NEWS_SOURCES: NewsSource[] = [
   {
+    title: "OpenAI Blog",
+    url: "https://openai.com/news/",
+    originalUrl: "https://openai.com/news/",
+    category: "Industry"
+  },
+  {
+    title: "Google DeepMind", 
+    url: "https://deepmind.google/discover/blog/",
+    originalUrl: "https://deepmind.google/discover/blog/",
+    category: "Research"
+  },
+  {
+    title: "Anthropic News",
+    url: "https://www.anthropic.com/news",
+    originalUrl: "https://www.anthropic.com/news",
+    category: "Industry"
+  },
+  {
     title: "Hacker News AI",
-    url: "https://cors-anywhere.herokuapp.com/https://hn.algolia.com/?q=artificial+intelligence",
+    url: "https://hn.algolia.com/?q=artificial+intelligence",
     originalUrl: "https://hn.algolia.com/?q=artificial+intelligence",
-    category: "Tech"
+    category: "Community"
   },
   {
-    title: "Wired AI", 
-    url: "https://cors-anywhere.herokuapp.com/https://www.wired.com/tag/artificial-intelligence/",
-    originalUrl: "https://www.wired.com/tag/artificial-intelligence/",
+    title: "MIT Technology Review",
+    url: "https://www.technologyreview.com/topic/artificial-intelligence/",
+    originalUrl: "https://www.technologyreview.com/topic/artificial-intelligence/",
     category: "News"
-  },
-  {
-    title: "VentureBeat AI",
-    url: "https://cors-anywhere.herokuapp.com/https://venturebeat.com/category/ai/",
-    originalUrl: "https://venturebeat.com/category/ai/",
-    category: "News"
-  },
-  {
-    title: "The Next Web AI",
-    url: "https://thenextweb.com/neural/amp/",
-    originalUrl: "https://thenextweb.com/neural",
-    category: "Tech"
-  },
-  {
-    title: "Analytics India AI",
-    url: "https://cors-anywhere.herokuapp.com/https://analyticsindiamag.com/category/ai/",
-    originalUrl: "https://analyticsindiamag.com/category/ai/",
-    category: "Tech"
   }
 ];
 
@@ -54,7 +54,6 @@ const EmbeddedCoverFlow = () => {
   const [contentStates, setContentStates] = useState<{ [key: number]: ContentState }>({});
   const carouselRef = useRef<HTMLElement>(null);
   const isScrollingRef = useRef(false);
-  const iframeRefs = useRef<{ [key: number]: HTMLIFrameElement | null }>({});
 
   const getCardTransform = (index: number) => {
     const diff = index - activeIndex;
@@ -97,59 +96,74 @@ const EmbeddedCoverFlow = () => {
   const loadContent = async (index: number) => {
     const source = VERIFIED_NEWS_SOURCES[index];
     
+    console.log(`🔄 Loading content for ${source.title}...`);
+    
     setContentStates(prev => ({
       ...prev,
       [index]: { isLoaded: false, hasError: false, isScreenshot: false, content: 'loading' }
     }));
 
     try {
-      // Try loading iframe first
+      // Try loading iframe first with a timeout
       await new Promise<void>((resolve, reject) => {
         const iframe = document.createElement('iframe');
         iframe.src = source.url;
         iframe.style.display = 'none';
-        iframe.onload = () => {
-          document.body.removeChild(iframe);
-          resolve();
-        };
-        iframe.onerror = () => {
-          document.body.removeChild(iframe);
-          reject(new Error('Iframe failed'));
-        };
-        document.body.appendChild(iframe);
+        iframe.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-popups', 'allow-forms');
         
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
           reject(new Error('Timeout'));
-        }, 5000);
+        }, 3000);
+
+        iframe.onload = () => {
+          clearTimeout(timeout);
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          resolve();
+        };
+        
+        iframe.onerror = () => {
+          clearTimeout(timeout);
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          reject(new Error('Iframe failed'));
+        };
+        
+        document.body.appendChild(iframe);
       });
 
+      console.log(`✅ Iframe loaded successfully for ${source.title}`);
       setContentStates(prev => ({
         ...prev,
         [index]: { isLoaded: true, hasError: false, isScreenshot: false, content: 'iframe' }
       }));
 
     } catch (error) {
-      console.log(`❌ Error en iframe ${source.title}, intentando screenshot...`);
+      console.log(`❌ Iframe failed for ${source.title}, trying screenshot...`);
       
       try {
-        // Try screenshot fallback
+        // Try screenshot fallback with a different service
         await new Promise<void>((resolve, reject) => {
           const img = new Image();
           img.onload = () => resolve();
           img.onerror = () => reject(new Error('Screenshot failed'));
-          img.src = `https://api.urlbox.io/v1/ca482d7e-9417-4569-90fe-80f7c5e1c781/png?url=${encodeURIComponent(source.originalUrl || source.url)}&width=600&height=800`;
+          // Using a more reliable screenshot service
+          img.src = `https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`;
         });
 
+        console.log(`✅ Screenshot loaded for ${source.title}`);
         setContentStates(prev => ({
           ...prev,
           [index]: { isLoaded: true, hasError: false, isScreenshot: true, content: 'screenshot' }
         }));
 
       } catch (screenshotError) {
-        console.log(`❌ Error en screenshot ${source.title}, mostrando estado de error...`);
+        console.log(`❌ Screenshot also failed for ${source.title}, showing error state`);
         setContentStates(prev => ({
           ...prev,
           [index]: { isLoaded: true, hasError: true, isScreenshot: false, content: 'error' }
@@ -159,6 +173,7 @@ const EmbeddedCoverFlow = () => {
   };
 
   const refreshContent = (index: number) => {
+    console.log(`🔄 Refreshing content for ${VERIFIED_NEWS_SOURCES[index].title}`);
     setContentStates(prev => {
       const newStates = { ...prev };
       delete newStates[index];
@@ -168,16 +183,19 @@ const EmbeddedCoverFlow = () => {
   };
 
   useEffect(() => {
-    // Load content for visible cards
+    // Load content for visible cards with delay
     const indicesToLoad = [
       activeIndex,
       (activeIndex + 1) % VERIFIED_NEWS_SOURCES.length,
       (activeIndex - 1 + VERIFIED_NEWS_SOURCES.length) % VERIFIED_NEWS_SOURCES.length
     ];
 
-    indicesToLoad.forEach(index => {
+    indicesToLoad.forEach((index, i) => {
       if (!contentStates[index]) {
-        loadContent(index);
+        // Add delay between requests to avoid rate limiting
+        setTimeout(() => {
+          loadContent(index);
+        }, i * 500);
       }
     });
   }, [activeIndex]);
@@ -240,7 +258,7 @@ const EmbeddedCoverFlow = () => {
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-            <div className="text-gray-500">Cargando {source.title}...</div>
+            <div className="text-gray-500">Loading {source.title}...</div>
           </div>
         </div>
       );
@@ -249,7 +267,6 @@ const EmbeddedCoverFlow = () => {
     if (state.content === 'iframe') {
       return (
         <iframe
-          ref={(el) => { iframeRefs.current[index] = el; }}
           src={source.url}
           style={{ width: '100%', height: '100%', border: 'none', borderRadius: '12px' }}
           loading="lazy"
@@ -262,27 +279,32 @@ const EmbeddedCoverFlow = () => {
 
     if (state.content === 'screenshot') {
       return (
-        <img
-          src={`https://api.urlbox.io/v1/ca482d7e-9417-4569-90fe-80f7c5e1c781/png?url=${encodeURIComponent(source.originalUrl || source.url)}&width=600&height=800`}
-          alt={`Screenshot of ${source.title}`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
-        />
+        <div className="relative w-full h-full">
+          <img
+            src={`https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`}
+            alt={`Screenshot of ${source.title}`}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+          />
+          <div className="absolute top-2 right-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+            📸 Preview
+          </div>
+        </div>
       );
     }
 
     if (state.content === 'error') {
       return (
-        <div className="flex items-center justify-center h-full bg-white">
+        <div className="flex items-center justify-center h-full bg-white rounded-lg">
           <div className="text-center p-8">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">No se pudo cargar el contenido</h3>
-            <p className="text-gray-600 mb-4">Intenta visitar directamente:</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Content unavailable</h3>
+            <p className="text-gray-600 mb-4">Visit directly:</p>
             <a 
               href={source.originalUrl || source.url} 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 hover:-translate-y-1 shadow-lg"
             >
-              Visitar {source.title}
+              Visit {source.title}
             </a>
           </div>
         </div>
@@ -388,7 +410,7 @@ const EmbeddedCoverFlow = () => {
                           <div className="text-lg font-bold text-gray-800 truncate">{source.title}</div>
                           <div className="text-sm text-gray-600 flex items-center space-x-2">
                             <span>{source.category}</span>
-                            {state?.isScreenshot && <span className="text-blue-600">📸 Screenshot</span>}
+                            {state?.isScreenshot && <span className="text-blue-600">📸 Preview</span>}
                           </div>
                         </div>
                         <div className="flex space-x-2">
@@ -398,7 +420,7 @@ const EmbeddedCoverFlow = () => {
                               refreshContent(index);
                             }}
                             className="p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                            title="Recargar contenido"
+                            title="Refresh content"
                           >
                             <RefreshCw className="w-4 h-4" />
                           </button>
@@ -408,7 +430,7 @@ const EmbeddedCoverFlow = () => {
                               window.open(source.originalUrl || source.url, '_blank');
                             }}
                             className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                            title="Abrir en nueva pestaña"
+                            title="Open in new tab"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
