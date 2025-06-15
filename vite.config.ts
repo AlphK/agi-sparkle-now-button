@@ -1,41 +1,40 @@
 
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: "::",
-    port: 8080,
-    headers: {
-      // Headers de seguridad adicionales
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-    }
-  },
-  plugins: [
-    react(),
-    mode === 'development' &&
-    componentTagger(),
-  ].filter(Boolean),
+export default defineConfig({
+  plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    port: 5173,
+    host: true,
+    cors: true,
+    strictPort: false,
+    hmr: {
+      port: 5173
+    }
+  },
+  preview: {
+    port: 5173,
+    host: true,
+    cors: true
+  },
   build: {
-    // Configuraciones de seguridad para el build
+    outDir: 'dist',
+    sourcemap: false,
     rollupOptions: {
+      external: [],
       output: {
-        // Sanitizar nombres de archivos
-        sanitizeFileName: (name) => {
-          return name.replace(/[^a-zA-Z0-9.-_]/g, '_');
-        }
+        manualChunks: undefined
       }
     }
+  },
+  define: {
+    global: 'globalThis',
   }
-}));
+})
