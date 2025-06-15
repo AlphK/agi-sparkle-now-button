@@ -98,7 +98,7 @@ const Index = () => {
           dataService.fetchArXivPapers(),
           dataService.fetchRedditMLPosts(),
           dataService.fetchHackerNewsPosts(),
-          dataService.fetchRSSFeeds()
+          dataService.fetchExpandedRSSFeeds()
         ]);
         
         const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
