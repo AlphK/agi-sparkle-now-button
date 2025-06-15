@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
-import StackedSites from '@/components/StackedSites';
+import CoverFlowNews from '@/components/CoverFlowNews';
 import AGIDetectionAnimation from '@/components/AGIDetectionAnimation';
 
 interface NewsItem {
@@ -23,14 +23,12 @@ const Index = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
-  const [showNotYet, setShowNotYet] = useState(false);
-  const [showScrollHint, setShowScrollHint] = useState(false);
+  const [showScrollMessage, setShowScrollMessage] = useState(false);
   const { toast } = useToast();
 
   const handleScan = async () => {
     setIsScanning(true);
-    setShowNotYet(false);
-    setShowScrollHint(false);
+    setShowScrollMessage(false);
     
     try {
       const dataService = RealDataService.getInstance(toast);
@@ -72,15 +70,11 @@ const Index = () => {
             setAgiDetected(true);
           }, 1000);
         } else {
-          // Mostrar "Not yet" por 3 segundos después de la búsqueda
-          setShowNotYet(true);
+          // Mostrar mensaje de scroll solo por 4 segundos
+          setShowScrollMessage(true);
           setTimeout(() => {
-            setShowNotYet(false);
-            // Luego mostrar scroll hint
-            setTimeout(() => {
-              setShowScrollHint(true);
-            }, 500);
-          }, 3000);
+            setShowScrollMessage(false);
+          }, 4000);
         }
       }
       
@@ -125,25 +119,9 @@ const Index = () => {
     return <span className="text-2xl font-bold">AGI</span>;
   };
 
-  // Handle scroll to hide scroll hint
-  const handleScroll = () => {
-    const scrolled = window.scrollY > 100;
-    if (scrolled && showScrollHint) {
-      setShowScrollHint(false);
-    } else if (!scrolled && hasScanned && !agiDetected && !showNotYet) {
-      setShowScrollHint(true);
-    }
-  };
-
-  // Add scroll listener
-  React.useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [hasScanned, agiDetected, showNotYet, showScrollHint]);
-
   return (
     <div className="min-h-screen bg-white">
-      {/* Animación de detección AGI simplificada */}
+      {/* Animación de detección AGI */}
       <AGIDetectionAnimation 
         isDetected={agiDetected} 
         onClose={() => setAgiDetected(false)} 
@@ -175,28 +153,21 @@ const Index = () => {
           </div>
         </Button>
 
-        {/* "Not yet" Message - Solo aparece después de la búsqueda por 3 segundos */}
-        {showNotYet && (
-          <div className="mt-6 text-2xl font-bold text-gray-600 animate-fade-in">
-            Not yet
-          </div>
-        )}
-
-        {/* Scroll hint - Solo cuando debe aparecer */}
-        {showScrollHint && (
-          <div className="mt-8 text-center animate-bounce">
-            <p className="text-gray-500 mb-2">Latest AI news below ↓</p>
-            <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center">
+        {/* Mensaje temporal de scroll - Solo aparece 4 segundos después del escaneo */}
+        {showScrollMessage && (
+          <div className="mt-8 text-center animate-fade-in">
+            <p className="text-gray-600 text-lg mb-3">Latest AI news below ↓</p>
+            <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center animate-bounce">
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Stacked Sites Section - Aparece abajo después del scan solo si no hay AGI */}
+      {/* Cover Flow News Section - Aparece abajo después del scan solo si no hay AGI */}
       {hasScanned && !agiDetected && newsData.length > 0 && (
         <div className="min-h-screen">
-          <StackedSites sources={newsData} />
+          <CoverFlowNews sources={newsData} />
         </div>
       )}
     </div>
