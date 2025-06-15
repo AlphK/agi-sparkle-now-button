@@ -10,6 +10,7 @@ export class OpenAIService {
   private model: string;
 
   constructor() {
+    // Usando el proxy que mencionaste
     this.proxyUrl = 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
     this.authToken = '0204';
     this.model = 'gpt-4o-mini';
@@ -46,14 +47,14 @@ Responde con JSON:
 }`;
 
     try {
-      console.log('Haciendo petición al proxy OpenAI:', this.proxyUrl);
+      console.log('🤖 Haciendo petición al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
-          'Origin': 'https://agi-check.lovable.app'
+          'Origin': window.location.origin
         },
         body: JSON.stringify({
           model: this.model,
@@ -63,16 +64,16 @@ Responde con JSON:
         })
       });
 
-      console.log('Estado de respuesta:', response.status);
+      console.log('📊 Estado de respuesta OpenAI:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Respuesta de error:', errorText);
+        console.error('❌ Respuesta de error:', errorText);
         throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('Respuesta OpenAI:', data);
+      console.log('✅ Respuesta OpenAI recibida:', data);
       
       if (!data.choices?.[0]?.message?.content) {
         throw new Error('Estructura de respuesta inválida');
@@ -94,7 +95,7 @@ Responde con JSON:
         keyInsights: validatedAnalysis.keyInsights.map(insight => sanitizeContent.text(insight))
       };
     } catch (error) {
-      console.error('Análisis OpenAI falló:', error);
+      console.error('❌ Análisis OpenAI falló:', error);
       return this.fallbackAnalysis(sanitizedTitle);
     }
   }
@@ -139,14 +140,14 @@ Responde con JSON:
 }`;
 
     try {
-      console.log('Haciendo análisis batch al proxy OpenAI:', this.proxyUrl);
+      console.log('🧠 Haciendo análisis batch al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
-          'Origin': 'https://agi-check.lovable.app'
+          'Origin': window.location.origin
         },
         body: JSON.stringify({
           model: this.model,
@@ -156,16 +157,16 @@ Responde con JSON:
         })
       });
 
-      console.log('Estado de respuesta análisis batch:', response.status);
+      console.log('📊 Estado de respuesta análisis batch:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error respuesta análisis batch:', errorText);
+        console.error('❌ Error respuesta análisis batch:', errorText);
         throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('Respuesta análisis batch OpenAI:', data);
+      console.log('✅ Respuesta análisis batch OpenAI:', data);
       
       if (!data.choices?.[0]?.message?.content) {
         throw new Error('Estructura de respuesta inválida');
@@ -197,7 +198,7 @@ Responde con JSON:
         }
       };
     } catch (error) {
-      console.error('Análisis batch falló:', error);
+      console.error('❌ Análisis batch falló:', error);
       return this.fallbackBatchAnalysis(sanitizedItems);
     }
   }
