@@ -1,28 +1,26 @@
 import { z } from 'zod';
 import { AnalysisResultSchema, BatchAnalysisResultSchema, type AnalysisResult, type BatchAnalysisResult } from '@/schemas/openai';
 import { sanitizeContent } from '@/utils/sanitizer';
-import { secureApiClient } from '@/utils/secureApiClient';
 
 interface OpenAIConfig {
-  apiKey: string;
+  proxyUrl?: string;
+  authToken?: string;
   model?: string;
 }
 
 export class OpenAIService {
   private static instance: OpenAIService;
-  private apiKey: string;
+  private proxyUrl: string;
+  private authToken: string;
   private model: string;
 
-  constructor(config: OpenAIConfig) {
-    // Validate API key format
-    if (!config.apiKey || !config.apiKey.startsWith('sk-')) {
-      throw new Error('Invalid OpenAI API key format');
-    }
-    this.apiKey = config.apiKey;
+  constructor(config: OpenAIConfig = {}) {
+    this.proxyUrl = config.proxyUrl || 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
+    this.authToken = config.authToken || 'secure-token-123';
     this.model = config.model || 'gpt-4.1-mini-2025-04-14';
   }
 
-  static getInstance(config: OpenAIConfig): OpenAIService {
+  static getInstance(config: OpenAIConfig = {}): OpenAIService {
     if (!OpenAIService.instance) {
       OpenAIService.instance = new OpenAIService(config);
     }
@@ -30,7 +28,6 @@ export class OpenAIService {
   }
 
   async analyzeNewsItem(title: string, source: string): Promise<AnalysisResult> {
-    // Sanitize inputs
     const sanitizedTitle = sanitizeContent.text(title);
     const sanitizedSource = sanitizeContent.text(source);
 
@@ -53,11 +50,16 @@ Respond with JSON:
   "keyInsights": ["insight1", "insight2"]
 }`;
 
+    if (!this.proxyUrl || !this.authToken) {
+      console.warn("Proxy not configured. Using fallback analysis.");
+      return this.fallbackAnalysis(sanitizedTitle);
+    }
+
     try {
-      const response = await secureApiClient.secureRequest('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -65,9 +67,12 @@ Respond with JSON:
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 300
-        }),
-        timeout: 30000
+        })
       });
+
+      if (!response.ok) {
+        throw new Error(`Error from proxy: ${response.statusText}`);
+      }
 
       const data = await response.json();
       
@@ -75,7 +80,6 @@ Respond with JSON:
         throw new Error('Invalid response structure');
       }
 
-      // Parse and validate JSON response
       let parsedContent;
       try {
         parsedContent = JSON.parse(data.choices[0].message.content);
@@ -83,10 +87,8 @@ Respond with JSON:
         throw new Error('Invalid JSON in response');
       }
 
-      // Validate with Zod schema
       const validatedAnalysis = AnalysisResultSchema.parse(parsedContent);
       
-      // Sanitize the validated content
       return {
         relevance: validatedAnalysis.relevance,
         agiProbability: validatedAnalysis.agiProbability,
@@ -100,7 +102,6 @@ Respond with JSON:
   }
 
   async batchAnalyzeNews(newsItems: Array<{ title: string; source: string }>): Promise<BatchAnalysisResult> {
-    // Sanitize all inputs
     const sanitizedItems = newsItems.map(item => ({
       title: sanitizeContent.text(item.title),
       source: sanitizeContent.text(item.source)
@@ -139,21 +140,29 @@ Respond with JSON:
   }
 }`;
 
+    if (!this.proxyUrl || !this.authToken) {
+      console.warn("Proxy not configured. Using fallback analysis.");
+      return this.fallbackBatchAnalysis(sanitizedItems);
+    }
+
     try {
-      const response = await secureApiClient.secureRequest('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4.1-2025-04-14',
+          model: this.model,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.2,
           max_tokens: 2000
-        }),
-        timeout: 45000
+        })
       });
+
+      if (!response.ok) {
+        throw new Error(`Error from proxy: ${response.statusText}`);
+      }
 
       const data = await response.json();
       
@@ -168,10 +177,8 @@ Respond with JSON:
         throw new Error('Invalid JSON in response');
       }
 
-      // Validate with Zod schema
       const validatedResult = BatchAnalysisResultSchema.parse(parsedContent);
       
-      // Sanitize all content in the result
       return {
         items: validatedResult.items.map(item => ({
           title: sanitizeContent.text(item.title),

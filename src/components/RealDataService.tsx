@@ -33,13 +33,13 @@ export class RealDataService {
     return RealDataService.instance;
   }
 
-  setOpenAIKey(apiKey: string) {
+  initializeAI() {
     try {
-      this.openAIService = OpenAIService.getInstance({ apiKey });
+      this.openAIService = OpenAIService.getInstance();
     } catch (error) {
       this.toast({
-        title: "❌ Invalid API Key",
-        description: "Please provide a valid OpenAI API key",
+        title: "⚠️ AI Service Warning",
+        description: "AI analysis will use fallback mode",
         variant: "destructive",
       });
       throw error;
@@ -70,7 +70,6 @@ export class RealDataService {
         const updated = entry.getElementsByTagName('updated')[0]?.textContent || '';
         const id = entry.getElementsByTagName('id')[0]?.textContent || '';
         
-        // Sanitize content before processing
         const sanitized = sanitizeContent.newsItem({
           title,
           source: 'ArXiv'
@@ -317,7 +316,7 @@ export class RealDataService {
   }> {
     this.toast({
       title: "🧠 AI-Powered Analysis",
-      description: "Using OpenAI to analyze content for AGI indicators...",
+      description: "Using secure proxy to analyze content for AGI indicators...",
     });
 
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
@@ -328,6 +327,10 @@ export class RealDataService {
     ]);
 
     const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
+
+    if (!this.openAIService) {
+      this.initializeAI();
+    }
 
     if (!this.openAIService) {
       return this.performBasicAGIScan(allNews);

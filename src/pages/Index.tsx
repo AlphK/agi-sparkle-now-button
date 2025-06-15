@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Loader2, Zap, Brain, Sparkles, Key, Shield } from 'lucide-react';
+import { Loader2, Zap, Brain, Sparkles, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
-import CoverFlowNews from '@/components/CoverFlowNews';
+import EmbeddedCoverFlow from '@/components/EmbeddedCoverFlow';
 import AGIDetectionAnimation from '@/components/AGIDetectionAnimation';
 import SecurityAlert from '@/components/SecurityAlert';
 
@@ -30,25 +29,8 @@ const Index = () => {
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [showScrollMessage, setShowScrollMessage] = useState(false);
-  const [openAIKey, setOpenAIKey] = useState('');
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const [usingAI, setUsingAI] = useState(false);
-  const [keyError, setKeyError] = useState('');
+  const [useAI, setUseAI] = useState(false);
   const { toast } = useToast();
-
-  const validateAPIKey = (key: string): boolean => {
-    if (!key.trim()) return false;
-    if (!key.startsWith('sk-')) {
-      setKeyError('API key must start with "sk-"');
-      return false;
-    }
-    if (key.length < 45) {
-      setKeyError('API key appears to be too short');
-      return false;
-    }
-    setKeyError('');
-    return true;
-  };
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -57,29 +39,8 @@ const Index = () => {
     try {
       const dataService = RealDataService.getInstance(toast);
       
-      // Validate and set OpenAI key if provided
-      if (openAIKey.trim()) {
-        if (!validateAPIKey(openAIKey.trim())) {
-          toast({
-            title: "❌ Invalid API Key",
-            description: keyError || "Please provide a valid OpenAI API key",
-            variant: "destructive",
-          });
-          setIsScanning(false);
-          return;
-        }
-        
-        try {
-          dataService.setOpenAIKey(openAIKey.trim());
-          setUsingAI(true);
-        } catch (error) {
-          setIsScanning(false);
-          return;
-        }
-      }
-
       let scanResult;
-      if (usingAI && openAIKey.trim()) {
+      if (useAI) {
         scanResult = await dataService.performIntelligentAGIScan();
         setNewsData(scanResult.newsWithAnalysis);
         
@@ -108,7 +69,6 @@ const Index = () => {
       console.log('Scan complete:', scanResult, newsData.length);
       setHasScanned(true);
 
-      // AGI Detection Logic
       if (testMode) {
         setTimeout(() => setAgiDetected(true), 1000);
       } else if (scanResult.detected) {
@@ -161,77 +121,43 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* AGI Detection Animation */}
       <AGIDetectionAnimation 
         isDetected={agiDetected} 
         onClose={() => setAgiDetected(false)} 
       />
 
-      {/* Header Section */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
-        {/* Security Notice */}
-        {showKeyInput && (
+        {useAI && (
           <div className="absolute top-16 left-4 right-4 max-w-md mx-auto">
             <SecurityAlert
-              type="warning"
-              title="Security Notice"
-              message="API keys are processed securely and not stored. For production use, consider using environment variables."
+              type="info"
+              title="Secure AI Analysis"
+              message="Using secure proxy connection for AI-powered AGI detection."
             />
           </div>
         )}
 
-        {/* Controls */}
         <div className="absolute top-4 right-4 flex flex-col space-y-2">
-          {/* Test Mode Toggle */}
           <div className="flex items-center space-x-2 bg-gray-100 p-2 rounded-lg">
             <span className="text-sm">Test AGI</span>
             <Switch checked={testMode} onCheckedChange={setTestMode} />
           </div>
           
-          {/* AI Enhancement Toggle */}
           <div className="flex items-center space-x-2 bg-blue-50 p-2 rounded-lg">
             <Brain className="w-4 h-4 text-blue-600" />
             <span className="text-sm">AI Enhanced</span>
             <Switch 
-              checked={showKeyInput} 
-              onCheckedChange={setShowKeyInput}
+              checked={useAI} 
+              onCheckedChange={setUseAI}
             />
           </div>
-          
-          {/* OpenAI Key Input */}
-          {showKeyInput && (
-            <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
-              <div className="flex items-center space-x-2 mb-2">
-                <Shield className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium">OpenAI API Key</span>
-              </div>
-              <Input
-                type="password"
-                placeholder="sk-..."
-                value={openAIKey}
-                onChange={(e) => {
-                  setOpenAIKey(e.target.value);
-                  setKeyError('');
-                }}
-                className={`text-xs ${keyError ? 'border-red-500' : ''}`}
-              />
-              {keyError && (
-                <p className="text-xs text-red-500 mt-1">{keyError}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                Secure AI-powered AGI detection
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Big Red Button */}
         <Button
           onClick={handleScan}
           disabled={isScanning}
           className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 relative overflow-hidden"
         >
-          {/* Scanning effect overlay */}
           {isScanning && (
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 animate-spin rounded-full"></div>
           )}
@@ -240,15 +166,13 @@ const Index = () => {
           </div>
         </Button>
 
-        {/* Status Indicator */}
-        {usingAI && openAIKey && (
+        {useAI && (
           <div className="mt-4 flex items-center space-x-2 text-blue-600">
             <Shield className="w-5 h-5" />
             <span className="text-sm font-medium">Secure AI Detection Active</span>
           </div>
         )}
 
-        {/* Scroll Message */}
         {showScrollMessage && (
           <div className="mt-8 text-center animate-fade-in">
             <p className="text-gray-600 text-lg mb-3">Latest AI news below ↓</p>
@@ -259,10 +183,13 @@ const Index = () => {
         )}
       </div>
 
-      {/* Cover Flow News Section */}
       {hasScanned && !agiDetected && newsData.length > 0 && (
         <div className="min-h-screen">
-          <CoverFlowNews sources={newsData} />
+          <EmbeddedCoverFlow sources={newsData.map(item => ({
+            title: item.title,
+            url: item.url,
+            category: item.category
+          }))} />
         </div>
       )}
     </div>
