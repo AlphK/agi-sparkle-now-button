@@ -72,37 +72,35 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
     <div className="h-screen bg-gray-100 flex flex-col">
       {/* Browser-like tabs */}
       <div className="bg-gray-200 border-b border-gray-300 flex items-end overflow-x-auto">
-        <ScrollArea orientation="horizontal" className="w-full">
-          <div className="flex min-w-max">
-            {visibleSources.map((source, index) => {
-              const originalIndex = sources.indexOf(source);
-              const isActive = originalIndex === activeTab;
-              
-              return (
-                <div
-                  key={originalIndex}
-                  onClick={() => setActiveTab(originalIndex)}
-                  className={`group min-w-[280px] max-w-[320px] h-10 flex items-center px-4 cursor-pointer transition-all duration-200 ${
-                    isActive 
-                      ? 'bg-white border-t border-l border-r border-gray-300 rounded-t-lg -mb-px z-10' 
-                      : 'bg-gray-100 hover:bg-gray-50 border-r border-gray-300 last:border-r-0'
-                  }`}
+        <div className="flex min-w-max">
+          {visibleSources.map((source, index) => {
+            const originalIndex = sources.indexOf(source);
+            const isActive = originalIndex === activeTab;
+            
+            return (
+              <div
+                key={originalIndex}
+                onClick={() => setActiveTab(originalIndex)}
+                className={`group min-w-[280px] max-w-[320px] h-10 flex items-center px-4 cursor-pointer transition-all duration-200 ${
+                  isActive 
+                    ? 'bg-white border-t border-l border-r border-gray-300 rounded-t-lg -mb-px z-10' 
+                    : 'bg-gray-100 hover:bg-gray-50 border-r border-gray-300 last:border-r-0'
+                }`}
+              >
+                <span className="text-lg mr-2">{getSourceIcon(source.source)}</span>
+                <span className="flex-1 truncate text-sm font-medium text-gray-800">
+                  {source.title}
+                </span>
+                <button
+                  onClick={(e) => closeTab(originalIndex, e)}
+                  className="ml-2 p-1 rounded-full hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                 >
-                  <span className="text-lg mr-2">{getSourceIcon(source.source)}</span>
-                  <span className="flex-1 truncate text-sm font-medium text-gray-800">
-                    {source.title}
-                  </span>
-                  <button
-                    onClick={(e) => closeTab(originalIndex, e)}
-                    className="ml-2 p-1 rounded-full hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                  >
-                    <X className="w-3 h-3 text-gray-500" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
+                  <X className="w-3 h-3 text-gray-500" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Browser controls */}
