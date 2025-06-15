@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Zap, Brain, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
@@ -23,10 +23,12 @@ const Index = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
+  const [showScrollHint, setShowScrollHint] = useState(true);
   const { toast } = useToast();
 
   const handleScan = async () => {
     setIsScanning(true);
+    setShowScrollHint(false); // Hide scroll hint when scanning starts
     
     try {
       const dataService = RealDataService.getInstance(toast);
@@ -66,6 +68,11 @@ const Index = () => {
           setTimeout(() => {
             setAgiDetected(true);
           }, 1000);
+        } else {
+          // Show scroll hint after scan if no AGI detected
+          setTimeout(() => {
+            setShowScrollHint(true);
+          }, 500);
         }
       }
       
@@ -76,24 +83,65 @@ const Index = () => {
         description: "No se pudo conectar a las fuentes",
         variant: "destructive",
       });
+      setShowScrollHint(true); // Show hint even if error
     } finally {
       setIsScanning(false);
     }
   };
 
-  const getButtonText = () => {
-    if (isScanning) return "SCANNING...";
-    return "AGI";
+  const getButtonContent = () => {
+    if (isScanning) {
+      return (
+        <div className="flex flex-col items-center space-y-3">
+          <div className="relative">
+            <Brain className="w-12 h-12 animate-pulse text-blue-300" />
+            <Sparkles className="w-6 h-6 absolute -top-2 -right-2 animate-bounce text-yellow-300" />
+            <Zap className="w-4 h-4 absolute -bottom-1 -left-1 animate-ping text-green-300" />
+          </div>
+          <div className="text-center">
+            <span className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse">
+              ANALYZING
+            </span>
+            <div className="flex justify-center space-x-1 mt-1">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-2 h-2 bg-white rounded-full animate-bounce"
+                  style={{ animationDelay: `${i * 0.2}s` }}
+                ></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return <span className="text-2xl font-bold">AGI</span>;
   };
 
   const getStatusText = () => {
-    if (hasScanned && !agiDetected) return "Not yet";
+    if (hasScanned && !agiDetected && showScrollHint) return "Not yet";
     return "";
   };
 
+  // Handle scroll to hide/show scroll hint
+  const handleScroll = () => {
+    const scrolled = window.scrollY > 100;
+    if (scrolled && showScrollHint) {
+      setShowScrollHint(false);
+    } else if (!scrolled && hasScanned && !agiDetected) {
+      setShowScrollHint(true);
+    }
+  };
+
+  // Add scroll listener
+  React.useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasScanned, agiDetected, showScrollHint]);
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Animación de detección AGI */}
+      {/* Animación de detección AGI mejorada */}
       <AGIDetectionAnimation 
         isDetected={agiDetected} 
         onClose={() => setAgiDetected(false)} 
@@ -114,29 +162,26 @@ const Index = () => {
         <Button
           onClick={handleScan}
           disabled={isScanning}
-          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70"
+          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 relative overflow-hidden"
         >
-          <div className="flex flex-col items-center space-y-3">
-            {isScanning ? (
-              <>
-                <Loader2 className="w-12 h-12 animate-spin" />
-                <span className="text-xl font-bold">{getButtonText()}</span>
-              </>
-            ) : (
-              <span className="text-2xl font-bold">{getButtonText()}</span>
-            )}
+          {/* Scanning effect overlay */}
+          {isScanning && (
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 animate-spin rounded-full"></div>
+          )}
+          <div className="relative z-10">
+            {getButtonContent()}
           </div>
         </Button>
 
-        {/* Status Text */}
+        {/* Status Text - Solo aparece cuando debe */}
         {getStatusText() && (
-          <div className="mt-6 text-2xl font-bold text-gray-600">
+          <div className="mt-6 text-2xl font-bold text-gray-600 animate-fade-in">
             {getStatusText()}
           </div>
         )}
 
-        {/* Scroll hint when data is available */}
-        {hasScanned && !agiDetected && (
+        {/* Scroll hint - Solo cuando debe aparecer */}
+        {hasScanned && !agiDetected && showScrollHint && (
           <div className="mt-8 text-center animate-bounce">
             <p className="text-gray-500 mb-2">Latest AI news below ↓</p>
             <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center">
@@ -147,7 +192,7 @@ const Index = () => {
       </div>
 
       {/* Stacked Sites Section - Aparece abajo después del scan solo si no hay AGI */}
-      {hasScanned && !agiDetected && (
+      {hasScanned && !agiDetected && newsData.length > 0 && (
         <div className="min-h-screen">
           <StackedSites sources={newsData} />
         </div>
