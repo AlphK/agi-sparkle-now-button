@@ -9,6 +9,13 @@ interface NewsSource {
   originalUrl?: string;
 }
 
+interface ContentState {
+  isLoaded: boolean;
+  hasError: boolean;
+  isScreenshot: boolean;
+  content: 'loading' | 'iframe' | 'screenshot' | 'error';
+}
+
 const VERIFIED_NEWS_SOURCES: NewsSource[] = [
   {
     title: "Hacker News AI",
@@ -44,12 +51,10 @@ const VERIFIED_NEWS_SOURCES: NewsSource[] = [
 
 const EmbeddedCoverFlow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [loadedSources, setLoadedSources] = useState<Set<number>>(new Set());
-  const [errorSources, setErrorSources] = useState<Set<number>>(new Set());
-  const [screenshotSources, setScreenshotSources] = useState<Set<number>>(new Set());
+  const [contentStates, setContentStates] = useState<{ [key: number]: ContentState }>({});
   const carouselRef = useRef<HTMLElement>(null);
   const isScrollingRef = useRef(false);
-  const cache = new Map<string, string>();
+  const iframeRefs = useRef<{ [key: number]: HTMLIFrameElement | null }>({});
 
   const getCardTransform = (index: number) => {
     const diff = index - activeIndex;
@@ -89,141 +94,75 @@ const EmbeddedCoverFlow = () => {
     setActiveIndex((prev) => (prev - 1 + VERIFIED_NEWS_SOURCES.length) % VERIFIED_NEWS_SOURCES.length);
   };
 
-  const loadIframe = (index: number, url: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const iframe = document.createElement('iframe');
-      iframe.src = url;
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      iframe.style.borderRadius = '12px';
-      iframe.loading = 'lazy';
-      iframe.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-popups', 'allow-forms', 'allow-top-navigation');
-      iframe.referrerPolicy = 'no-referrer';
-      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
-      
-      const timeout = setTimeout(() => {
-        reject(new Error('Iframe load timeout'));
-      }, 10000);
-
-      iframe.onload = () => {
-        clearTimeout(timeout);
-        setLoadedSources(prev => new Set(prev).add(index));
-        resolve();
-      };
-      
-      iframe.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('Iframe load error'));
-      };
-
-      const container = document.querySelector(`[data-card-index="${index}"] .card-iframe-container`);
-      if (container) {
-        container.innerHTML = '';
-        container.appendChild(iframe);
-      }
-    });
-  };
-
-  const loadScreenshot = (index: number, url: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const img = document.createElement('img');
-      // Usando un servicio de screenshot público (puedes cambiar por otro)
-      img.src = `https://api.urlbox.io/v1/ca482d7e-9417-4569-90fe-80f7c5e1c781/png?url=${encodeURIComponent(url)}&width=600&height=800`;
-      img.style.width = '100%';
-      img.style.height = '100%';
-      img.style.objectFit = 'cover';
-      img.style.borderRadius = '12px';
-      img.alt = `Screenshot of ${VERIFIED_NEWS_SOURCES[index].title}`;
-      
-      img.onload = () => {
-        setScreenshotSources(prev => new Set(prev).add(index));
-        resolve();
-      };
-      
-      img.onerror = () => reject(new Error('Screenshot load error'));
-
-      const container = document.querySelector(`[data-card-index="${index}"] .card-iframe-container`);
-      if (container) {
-        container.innerHTML = '';
-        container.appendChild(img);
-      }
-    });
-  };
-
-  const showErrorState = (index: number) => {
-    const source = VERIFIED_NEWS_SOURCES[index];
-    const container = document.querySelector(`[data-card-index="${index}"] .card-iframe-container`);
-    if (container) {
-      container.innerHTML = `
-        <div class="error-state">
-          <div class="text-center p-8">
-            <h3 class="text-lg font-semibold text-gray-800 mb-2">No se pudo cargar el contenido</h3>
-            <p class="text-gray-600 mb-4">Intenta visitar directamente:</p>
-            <a href="${source.originalUrl || source.url}" target="_blank" class="visit-button inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 hover:-translate-y-1 shadow-lg">
-              Visitar ${source.title}
-            </a>
-          </div>
-        </div>
-      `;
-      setErrorSources(prev => new Set(prev).add(index));
-    }
-  };
-
   const loadContent = async (index: number) => {
     const source = VERIFIED_NEWS_SOURCES[index];
-    const cacheKey = source.url;
     
-    // Check cache first
-    if (cache.has(cacheKey)) {
-      const container = document.querySelector(`[data-card-index="${index}"] .card-iframe-container`);
-      if (container) {
-        container.innerHTML = cache.get(cacheKey)!;
-        setLoadedSources(prev => new Set(prev).add(index));
-      }
-      return;
-    }
+    setContentStates(prev => ({
+      ...prev,
+      [index]: { isLoaded: false, hasError: false, isScreenshot: false, content: 'loading' }
+    }));
 
     try {
-      console.log(`🔄 Intentando cargar iframe: ${source.title}`);
-      await loadIframe(index, source.url);
-      console.log(`✅ Iframe cargado: ${source.title}`);
-      
-      // Cache the successful load
-      const container = document.querySelector(`[data-card-index="${index}"] .card-iframe-container`);
-      if (container) {
-        cache.set(cacheKey, container.innerHTML);
-      }
-    } catch (iframeError) {
-      console.log(`❌ Error en iframe ${source.title}, intentando screenshot...`, iframeError);
+      // Try loading iframe first
+      await new Promise<void>((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.src = source.url;
+        iframe.style.display = 'none';
+        iframe.onload = () => {
+          document.body.removeChild(iframe);
+          resolve();
+        };
+        iframe.onerror = () => {
+          document.body.removeChild(iframe);
+          reject(new Error('Iframe failed'));
+        };
+        document.body.appendChild(iframe);
+        
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          reject(new Error('Timeout'));
+        }, 5000);
+      });
+
+      setContentStates(prev => ({
+        ...prev,
+        [index]: { isLoaded: true, hasError: false, isScreenshot: false, content: 'iframe' }
+      }));
+
+    } catch (error) {
+      console.log(`❌ Error en iframe ${source.title}, intentando screenshot...`);
       
       try {
-        await loadScreenshot(index, source.originalUrl || source.url);
-        console.log(`📸 Screenshot cargado: ${source.title}`);
+        // Try screenshot fallback
+        await new Promise<void>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error('Screenshot failed'));
+          img.src = `https://api.urlbox.io/v1/ca482d7e-9417-4569-90fe-80f7c5e1c781/png?url=${encodeURIComponent(source.originalUrl || source.url)}&width=600&height=800`;
+        });
+
+        setContentStates(prev => ({
+          ...prev,
+          [index]: { isLoaded: true, hasError: false, isScreenshot: true, content: 'screenshot' }
+        }));
+
       } catch (screenshotError) {
-        console.log(`❌ Error en screenshot ${source.title}, mostrando estado de error...`, screenshotError);
-        showErrorState(index);
+        console.log(`❌ Error en screenshot ${source.title}, mostrando estado de error...`);
+        setContentStates(prev => ({
+          ...prev,
+          [index]: { isLoaded: true, hasError: true, isScreenshot: false, content: 'error' }
+        }));
       }
     }
   };
 
   const refreshContent = (index: number) => {
-    const source = VERIFIED_NEWS_SOURCES[index];
-    cache.delete(source.url);
-    setLoadedSources(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(index);
-      return newSet;
-    });
-    setErrorSources(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(index);
-      return newSet;
-    });
-    setScreenshotSources(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(index);
-      return newSet;
+    setContentStates(prev => {
+      const newStates = { ...prev };
+      delete newStates[index];
+      return newStates;
     });
     loadContent(index);
   };
@@ -237,7 +176,7 @@ const EmbeddedCoverFlow = () => {
     ];
 
     indicesToLoad.forEach(index => {
-      if (!loadedSources.has(index) && !errorSources.has(index)) {
+      if (!contentStates[index]) {
         loadContent(index);
       }
     });
@@ -252,11 +191,9 @@ const EmbeddedCoverFlow = () => {
       const isInCarousel = carousel.contains(target);
       
       if (isInCarousel && !isScrollingRef.current) {
-        // Check if we're scrolling inside an active iframe or screenshot
         const activeCard = carousel.querySelector(`[data-card-index="${activeIndex}"]`);
         const isInActiveContent = activeCard && activeCard.contains(target);
         
-        // Only prevent scroll if we're not inside the active content
         if (!isInActiveContent) {
           event.preventDefault();
           event.stopPropagation();
@@ -294,6 +231,66 @@ const EmbeddedCoverFlow = () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeIndex]);
+
+  const renderContent = (source: NewsSource, index: number) => {
+    const state = contentStates[index];
+    
+    if (!state || state.content === 'loading') {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <div className="text-gray-500">Cargando {source.title}...</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (state.content === 'iframe') {
+      return (
+        <iframe
+          ref={(el) => { iframeRefs.current[index] = el; }}
+          src={source.url}
+          style={{ width: '100%', height: '100%', border: 'none', borderRadius: '12px' }}
+          loading="lazy"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+          referrerPolicy="no-referrer"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        />
+      );
+    }
+
+    if (state.content === 'screenshot') {
+      return (
+        <img
+          src={`https://api.urlbox.io/v1/ca482d7e-9417-4569-90fe-80f7c5e1c781/png?url=${encodeURIComponent(source.originalUrl || source.url)}&width=600&height=800`}
+          alt={`Screenshot of ${source.title}`}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+        />
+      );
+    }
+
+    if (state.content === 'error') {
+      return (
+        <div className="flex items-center justify-center h-full bg-white">
+          <div className="text-center p-8">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">No se pudo cargar el contenido</h3>
+            <p className="text-gray-600 mb-4">Intenta visitar directamente:</p>
+            <a 
+              href={source.originalUrl || source.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 hover:-translate-y-1 shadow-lg"
+            >
+              Visitar {source.title}
+            </a>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <section 
@@ -338,20 +335,11 @@ const EmbeddedCoverFlow = () => {
           position: relative;
         }
 
-        /* Allow interaction only with active card */
         .coverflow-card:not(.active) {
           pointer-events: none;
         }
 
         .coverflow-card.active {
-          pointer-events: auto;
-        }
-
-        .coverflow-card:not(.active) .card-iframe-container {
-          pointer-events: none;
-        }
-
-        .coverflow-card.active .card-iframe-container {
           pointer-events: auto;
         }
 
@@ -370,23 +358,6 @@ const EmbeddedCoverFlow = () => {
         .card-dot.red { background-color: #ef4444; }
         .card-dot.yellow { background-color: #eab308; }
         .card-dot.green { background-color: #22c55e; }
-
-        .error-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-          background: white;
-        }
-
-        .visit-button {
-          text-decoration: none;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .visit-button:hover {
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
       `}</style>
 
       <div className="flex items-center justify-center" style={{ perspective: '1200px' }}>
@@ -395,9 +366,7 @@ const EmbeddedCoverFlow = () => {
             {VERIFIED_NEWS_SOURCES.map((source, index) => {
               const cardStyle = getCardTransform(index);
               const isActive = index === activeIndex;
-              const isLoaded = loadedSources.has(index);
-              const hasError = errorSources.has(index);
-              const isScreenshot = screenshotSources.has(index);
+              const state = contentStates[index];
               
               return (
                 <article
@@ -419,7 +388,7 @@ const EmbeddedCoverFlow = () => {
                           <div className="text-lg font-bold text-gray-800 truncate">{source.title}</div>
                           <div className="text-sm text-gray-600 flex items-center space-x-2">
                             <span>{source.category}</span>
-                            {isScreenshot && <span className="text-blue-600">📸 Screenshot</span>}
+                            {state?.isScreenshot && <span className="text-blue-600">📸 Screenshot</span>}
                           </div>
                         </div>
                         <div className="flex space-x-2">
@@ -448,14 +417,7 @@ const EmbeddedCoverFlow = () => {
                     </div>
 
                     <div className="flex-1 card-iframe-container relative">
-                      {!isLoaded && !hasError && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
-                          <div className="text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-                            <div className="text-gray-500">Cargando {source.title}...</div>
-                          </div>
-                        </div>
-                      )}
+                      {renderContent(source, index)}
                     </div>
                   </div>
                 </article>
