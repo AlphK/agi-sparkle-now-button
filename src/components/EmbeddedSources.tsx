@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import { X, RefreshCw, ExternalLink } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface NewsItem {
   title: string;
@@ -26,15 +25,12 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
     e.stopPropagation();
     setClosedTabs(prev => new Set([...prev, index]));
     
-    // Si cerramos la pestaña activa, cambiar a la siguiente disponible
-    if (index === activeTab) {
-      const nextTab = visibleSources.findIndex((_, i) => 
-        sources.indexOf(visibleSources[i]) > index && !closedTabs.has(sources.indexOf(visibleSources[i]))
-      );
-      if (nextTab >= 0) {
-        setActiveTab(sources.indexOf(visibleSources[nextTab]));
-      } else if (visibleSources.length > 1) {
-        setActiveTab(sources.indexOf(visibleSources[0]));
+    // Si cerramos la pestaña activa, cambiar a la primera disponible
+    if (index === activeTab && visibleSources.length > 1) {
+      const remainingSources = sources.filter((_, i) => i !== index && !closedTabs.has(i));
+      if (remainingSources.length > 0) {
+        const nextIndex = sources.findIndex(source => source === remainingSources[0]);
+        setActiveTab(nextIndex);
       }
     }
   };
@@ -42,7 +38,7 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
   const getSourceIcon = (source: string) => {
     const icons: { [key: string]: string } = {
       'ArXiv': '📄',
-      'Reddit': '🔴',
+      'Reddit r/MachineLearning': '🔴', 
       'Hacker News': '🟠',
       'GitHub': '⚫',
       'Twitter': '🐦',
@@ -62,17 +58,19 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
 
   if (visibleSources.length === 0) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-gray-100">
         <p className="text-gray-500 text-xl">Todas las pestañas han sido cerradas</p>
       </div>
     );
   }
 
+  const activeSource = sources[activeTab];
+
   return (
     <div className="h-screen bg-gray-100 flex flex-col">
       {/* Browser-like tabs */}
-      <div className="bg-gray-200 border-b border-gray-300 flex items-end overflow-x-auto">
-        <div className="flex min-w-max">
+      <div className="bg-gray-200 border-b border-gray-300 flex items-end">
+        <div className="flex overflow-x-auto min-w-full">
           {visibleSources.map((source, index) => {
             const originalIndex = sources.indexOf(source);
             const isActive = originalIndex === activeTab;
@@ -81,10 +79,10 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
               <div
                 key={originalIndex}
                 onClick={() => setActiveTab(originalIndex)}
-                className={`group min-w-[280px] max-w-[320px] h-10 flex items-center px-4 cursor-pointer transition-all duration-200 ${
+                className={`group min-w-[280px] max-w-[320px] h-10 flex items-center px-4 cursor-pointer transition-all duration-200 flex-shrink-0 ${
                   isActive 
                     ? 'bg-white border-t border-l border-r border-gray-300 rounded-t-lg -mb-px z-10' 
-                    : 'bg-gray-100 hover:bg-gray-50 border-r border-gray-300 last:border-r-0'
+                    : 'bg-gray-100 hover:bg-gray-50 border-r border-gray-300'
                 }`}
               >
                 <span className="text-lg mr-2">{getSourceIcon(source.source)}</span>
@@ -109,10 +107,10 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
           <RefreshCw className="w-4 h-4 text-gray-600" />
         </button>
         <div className="flex-1 bg-gray-50 rounded-full px-4 py-2 text-sm text-gray-600 border">
-          {sources.find((_, i) => i === activeTab)?.url || ''}
+          {activeSource?.url || ''}
         </div>
         <button 
-          onClick={() => window.open(sources.find((_, i) => i === activeTab)?.url, '_blank')}
+          onClick={() => window.open(activeSource?.url, '_blank')}
           className="p-2 rounded hover:bg-gray-100 transition-colors"
         >
           <ExternalLink className="w-4 h-4 text-gray-600" />
@@ -121,22 +119,18 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
 
       {/* Content area */}
       <div className="flex-1 bg-white relative overflow-hidden">
-        {sources.map((source, index) => {
-          if (closedTabs.has(index) || index !== activeTab) return null;
-          
-          return (
-            <div key={index} className="w-full h-full">
-              <div className={`absolute top-0 left-0 w-1 h-full ${getRelevanceColor(source.relevance)}`} />
-              <iframe
-                src={source.url}
-                className="w-full h-full border-none"
-                title={source.title}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"
-                loading="lazy"
-              />
-            </div>
-          );
-        })}
+        {activeSource && !closedTabs.has(activeTab) && (
+          <div className="w-full h-full relative">
+            <div className={`absolute top-0 left-0 w-1 h-full ${getRelevanceColor(activeSource.relevance)} z-10`} />
+            <iframe
+              src={activeSource.url}
+              className="w-full h-full border-none"
+              title={activeSource.title}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"
+              loading="lazy"
+            />
+          </div>
+        )}
       </div>
 
       {/* Status bar */}
@@ -150,17 +144,17 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
           </span>
         </div>
         <div className="flex items-center space-x-2">
-          {sources.find((_, i) => i === activeTab) && (
+          {activeSource && (
             <>
               <span className={`px-2 py-1 rounded text-xs font-medium ${
-                sources.find((_, i) => i === activeTab)?.relevance === 'critical' ? 'bg-red-100 text-red-800' :
-                sources.find((_, i) => i === activeTab)?.relevance === 'high' ? 'bg-orange-100 text-orange-800' :
-                sources.find((_, i) => i === activeTab)?.relevance === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                activeSource.relevance === 'critical' ? 'bg-red-100 text-red-800' :
+                activeSource.relevance === 'high' ? 'bg-orange-100 text-orange-800' :
+                activeSource.relevance === 'medium' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-blue-100 text-blue-800'
               }`}>
-                {sources.find((_, i) => i === activeTab)?.relevance?.toUpperCase()}
+                {activeSource.relevance.toUpperCase()}
               </span>
-              <span>{sources.find((_, i) => i === activeTab)?.time}</span>
+              <span>{activeSource.time}</span>
             </>
           )}
         </div>
