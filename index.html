@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -6,6 +7,27 @@
     <title>agi-sparkle-now-button</title>
     <meta name="description" content="Lovable Generated Project" />
     <meta name="author" content="Lovable" />
+
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
+    
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval';
+      style-src 'self' 'unsafe-inline' fonts.googleapis.com;
+      font-src 'self' fonts.gstatic.com;
+      img-src 'self' data: https: image.thum.io;
+      connect-src 'self' https: wss: *.lovable.app *.val.run;
+      frame-src 'self' https://openai.com https://hn.algolia.com https://www.wired.com https://venturebeat.com https://thenextweb.com https://analyticsindiamag.com;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      upgrade-insecure-requests;
+    ">
 
     <meta property="og:title" content="agi-sparkle-now-button" />
     <meta property="og:description" content="Lovable Generated Project" />

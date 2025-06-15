@@ -1,5 +1,8 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { validateUrl, sanitizeUrl } from '@/utils/trustedDomains';
+import { securityLogger } from '@/utils/securityLogger';
 
 interface NewsSource {
   title: string;
@@ -102,6 +105,17 @@ const EmbeddedCoverFlow = () => {
   const loadContent = async (index: number) => {
     const source = VERIFIED_NEWS_SOURCES[index];
     
+    // Validación de seguridad antes de cargar
+    if (!validateUrl(source.url)) {
+      console.error(`🔒 URL no confiable rechazada: ${source.url}`);
+      securityLogger.log('url_validation_failed', `Rejected untrusted URL for ${source.title}`, source.url);
+      setContentStates(prev => ({
+        ...prev,
+        [index]: { isLoaded: true, hasError: true, isScreenshot: false, content: 'error' }
+      }));
+      return;
+    }
+    
     console.log(`🔄 Loading content for ${source.title}...`);
     
     setContentStates(prev => ({
@@ -110,19 +124,32 @@ const EmbeddedCoverFlow = () => {
     }));
 
     try {
-      // Try loading iframe first with a timeout
+      // Try loading iframe first with security timeout
       await new Promise<void>((resolve, reject) => {
         const iframe = document.createElement('iframe');
-        iframe.src = source.url;
+        iframe.src = sanitizeUrl(source.url);
         iframe.style.display = 'none';
-        iframe.sandbox.add('allow-same-origin', 'allow-scripts', 'allow-popups', 'allow-forms');
+        
+        // Configuración de seguridad del iframe
+        iframe.sandbox.add(
+          'allow-same-origin', 
+          'allow-scripts', 
+          'allow-popups', 
+          'allow-forms',
+          'allow-top-navigation-by-user-activation'
+        );
+        
+        // Headers de seguridad adicionales
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        iframe.loading = 'lazy';
         
         const timeout = setTimeout(() => {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
+          securityLogger.log('iframe_load_failed', `Timeout loading ${source.title}`, source.url);
           reject(new Error('Timeout'));
-        }, 3000);
+        }, 5000); // Timeout más corto
 
         iframe.onload = () => {
           clearTimeout(timeout);
@@ -137,6 +164,7 @@ const EmbeddedCoverFlow = () => {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
+          securityLogger.log('iframe_load_failed', `Iframe error for ${source.title}`, source.url);
           reject(new Error('Iframe failed'));
         };
         
@@ -153,13 +181,21 @@ const EmbeddedCoverFlow = () => {
       console.log(`❌ Iframe failed for ${source.title}, trying screenshot...`);
       
       try {
-        // Try screenshot fallback with a different service
+        // Try screenshot fallback with validation
+        const screenshotUrl = `https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`;
+        
+        if (!validateUrl(screenshotUrl)) {
+          throw new Error('Screenshot URL validation failed');
+        }
+        
         await new Promise<void>((resolve, reject) => {
           const img = new Image();
           img.onload = () => resolve();
-          img.onerror = () => reject(new Error('Screenshot failed'));
-          // Using a more reliable screenshot service
-          img.src = `https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`;
+          img.onerror = () => {
+            securityLogger.log('iframe_load_failed', `Screenshot failed for ${source.title}`, screenshotUrl);
+            reject(new Error('Screenshot failed'));
+          };
+          img.src = screenshotUrl;
         });
 
         console.log(`✅ Screenshot loaded for ${source.title}`);
@@ -290,23 +326,29 @@ const EmbeddedCoverFlow = () => {
     if (state.content === 'iframe') {
       return (
         <iframe
-          src={source.url}
+          src={sanitizeUrl(source.url)}
           style={{ width: '100%', height: '100%', border: 'none', borderRadius: '12px' }}
           loading="lazy"
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
-          referrerPolicy="no-referrer"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation-by-user-activation"
+          referrerPolicy="strict-origin-when-cross-origin"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          title={`Preview of ${source.title}`}
         />
       );
     }
 
     if (state.content === 'screenshot') {
+      const screenshotUrl = sanitizeUrl(`https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`);
       return (
         <div className="relative w-full h-full">
           <img
-            src={`https://image.thum.io/get/width/600/crop/800/${encodeURIComponent(source.originalUrl || source.url)}`}
+            src={screenshotUrl}
             alt={`Screenshot of ${source.title}`}
             style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+            onError={(e) => {
+              console.error(`Screenshot failed to load: ${screenshotUrl}`);
+              securityLogger.log('iframe_load_failed', `Screenshot image failed to load for ${source.title}`, screenshotUrl);
+            }}
           />
           <div className="absolute top-2 right-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
             📸 Preview
@@ -322,7 +364,7 @@ const EmbeddedCoverFlow = () => {
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Content unavailable</h3>
             <p className="text-gray-600 mb-4">Visit directly:</p>
             <a 
-              href={source.originalUrl || source.url} 
+              href={sanitizeUrl(source.originalUrl || source.url)} 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 hover:-translate-y-1 shadow-lg"
