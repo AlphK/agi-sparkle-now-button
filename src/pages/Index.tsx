@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
 import EmbeddedCoverFlow from '@/components/EmbeddedCoverFlow';
+import LatestAGINews from '@/components/LatestAGINews';
 import AGIDetectionAnimation from '@/components/AGIDetectionAnimation';
 import SecurityAlert from '@/components/SecurityAlert';
 
@@ -126,6 +127,7 @@ const Index = () => {
         onClose={() => setAgiDetected(false)} 
       />
 
+      {/* Sección principal del escáner */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
         {useAI && (
           <div className="absolute top-16 left-4 right-4 max-w-md mx-auto">
@@ -175,7 +177,7 @@ const Index = () => {
 
         {showScrollMessage && (
           <div className="mt-8 text-center animate-fade-in">
-            <p className="text-gray-600 text-lg mb-3">Latest AI news below ↓</p>
+            <p className="text-gray-600 text-lg mb-3">Explora sitios de AI abajo ↓</p>
             <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center animate-bounce">
               <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
             </div>
@@ -183,14 +185,12 @@ const Index = () => {
         )}
       </div>
 
-      {hasScanned && !agiDetected && newsData.length > 0 && (
-        <div className="min-h-screen">
-          <EmbeddedCoverFlow sources={newsData.map(item => ({
-            title: item.title,
-            url: item.url,
-            category: item.category
-          }))} />
-        </div>
+      {/* Carrusel de sitios de AI (siempre visible) */}
+      <EmbeddedCoverFlow />
+
+      {/* Sección de últimas noticias de AGI (solo después del scan con AI) */}
+      {hasScanned && useAI && newsData.length > 0 && (
+        <LatestAGINews newsData={newsData} agiDetected={agiDetected} />
       )}
     </div>
   );

@@ -2,27 +2,21 @@ import { z } from 'zod';
 import { AnalysisResultSchema, BatchAnalysisResultSchema, type AnalysisResult, type BatchAnalysisResult } from '@/schemas/openai';
 import { sanitizeContent } from '@/utils/sanitizer';
 
-interface OpenAIConfig {
-  proxyUrl?: string;
-  authToken?: string;
-  model?: string;
-}
-
 export class OpenAIService {
   private static instance: OpenAIService;
   private proxyUrl: string;
   private authToken: string;
   private model: string;
 
-  constructor(config: OpenAIConfig = {}) {
-    this.proxyUrl = config.proxyUrl || 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
-    this.authToken = config.authToken || 'secure-token-123';
-    this.model = config.model || 'gpt-4.1-mini-2025-04-14';
+  constructor() {
+    this.proxyUrl = 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
+    this.authToken = 'secure-token-123';
+    this.model = 'gpt-4o-mini';
   }
 
-  static getInstance(config: OpenAIConfig = {}): OpenAIService {
+  static getInstance(): OpenAIService {
     if (!OpenAIService.instance) {
-      OpenAIService.instance = new OpenAIService(config);
+      OpenAIService.instance = new OpenAIService();
     }
     return OpenAIService.instance;
   }
@@ -50,17 +44,13 @@ Respond with JSON:
   "keyInsights": ["insight1", "insight2"]
 }`;
 
-    if (!this.proxyUrl || !this.authToken) {
-      console.warn("Proxy not configured. Using fallback analysis.");
-      return this.fallbackAnalysis(sanitizedTitle);
-    }
-
     try {
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
+          'Origin': 'https://agi-check.lovable.app'
         },
         body: JSON.stringify({
           model: this.model,
@@ -140,17 +130,13 @@ Respond with JSON:
   }
 }`;
 
-    if (!this.proxyUrl || !this.authToken) {
-      console.warn("Proxy not configured. Using fallback analysis.");
-      return this.fallbackBatchAnalysis(sanitizedItems);
-    }
-
     try {
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'X-Auth-Token': this.authToken,
           'Content-Type': 'application/json',
+          'Origin': 'https://agi-check.lovable.app'
         },
         body: JSON.stringify({
           model: this.model,

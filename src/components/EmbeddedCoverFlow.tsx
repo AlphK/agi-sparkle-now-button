@@ -100,14 +100,30 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
 
   const handleIframeLoad = (index: number) => {
     setLoadedSources(prev => new Set(prev).add(index));
-    console.log(`Loaded: ${sources[index].title}`);
+    console.log(`Cargó: ${sources[index].title}`);
   };
 
   const handleIframeError = (index: number, error: any) => {
-    console.error(`Error loading ${sources[index].title}:`, error);
+    console.error(`Error en ${sources[index].title}:`, error);
   };
 
+  // Manejar scroll para navegación
   useEffect(() => {
+    const handleWheel = (event: WheelEvent) => {
+      // Solo manejar scroll si no estamos sobre un iframe activo
+      const target = event.target as Element;
+      const isOnActiveCard = target.closest('.card-iframe-container')?.closest('article')?.classList.contains('active');
+      
+      if (!isOnActiveCard) {
+        event.preventDefault();
+        if (event.deltaY > 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+      }
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') {
         prevSlide();
@@ -116,8 +132,13 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
       }
     };
 
+    window.addEventListener('wheel', handleWheel, { passive: false });
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   return (
@@ -174,7 +195,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
             return (
               <article
                 key={index}
-                className="absolute w-80 h-80 cursor-pointer transition-all duration-500 ease-out bg-white border-2 border-gray-200 rounded-2xl shadow-xl hover:shadow-2xl"
+                className={`absolute w-80 h-80 cursor-pointer transition-all duration-500 ease-out bg-white border-2 border-gray-200 rounded-2xl shadow-xl hover:shadow-2xl ${isActive ? 'active' : ''}`}
                 style={cardStyle}
                 onClick={() => handleCardClick(index)}
               >
@@ -198,7 +219,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
                           window.open(source.url, '_blank');
                         }}
                         className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                        title="Open in new tab"
+                        title="Abrir en nueva pestaña"
                       >
                         🔗
                       </button>
@@ -208,7 +229,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
                   <div className="flex-1 card-iframe-container relative z-10">
                     {!loadedSources.has(index) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                        <div className="text-gray-500">Loading...</div>
+                        <div className="text-gray-500">Cargando...</div>
                       </div>
                     )}
                     <iframe
