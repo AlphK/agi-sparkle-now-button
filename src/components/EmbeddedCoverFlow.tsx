@@ -110,9 +110,9 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
   // Manejar scroll para navegación
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
-      // Solo manejar scroll si no estamos sobre un iframe activo
       const target = event.target as Element;
-      const isOnActiveCard = target.closest('.card-iframe-container')?.closest('article')?.classList.contains('active');
+      const activeCard = document.querySelector('.coverflow-card.active');
+      const isOnActiveCard = target.closest('.coverflow-card') === activeCard;
       
       if (!isOnActiveCard) {
         event.preventDefault();
@@ -184,10 +184,32 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
         .card-dot.red { background-color: #ef4444; }
         .card-dot.yellow { background-color: #eab308; }
         .card-dot.green { background-color: #22c55e; }
+
+        .coverflow-card {
+          position: absolute;
+          width: var(--card-width);
+          height: var(--card-height);
+          cursor: pointer;
+          transition: all var(--transition);
+          background: white;
+          border: 2px solid #e5e7eb;
+          border-radius: 16px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          transform-style: preserve-3d;
+        }
+
+        .coverflow-card:hover {
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .coverflow-card.active {
+          border-color: #3b82f6;
+          box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25);
+        }
       `}</style>
 
       <div className="w-full max-w-6xl relative" style={{ perspective: '1200px' }}>
-        <div className="relative h-96 flex items-center justify-center">
+        <div className="relative h-96 flex items-center justify-center" style={{ height: 'var(--card-height)' }}>
           {sources.map((source, index) => {
             const cardStyle = getCardTransform(index);
             const isActive = index === activeIndex;
@@ -195,13 +217,11 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
             return (
               <article
                 key={index}
-                className={`absolute w-80 h-80 cursor-pointer transition-all duration-500 ease-out bg-white border-2 border-gray-200 rounded-2xl shadow-xl hover:shadow-2xl ${isActive ? 'active' : ''}`}
+                className={`coverflow-card ${isActive ? 'active' : ''}`}
                 style={cardStyle}
                 onClick={() => handleCardClick(index)}
               >
                 <div className="h-full p-4 flex flex-col relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent pointer-events-none"></div>
-                  
                   <div className="card-header mb-4 relative z-10">
                     <div className="card-dots">
                       <span className="card-dot red"></span>
@@ -221,7 +241,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
                         className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                         title="Abrir en nueva pestaña"
                       >
-                        🔗
+                        <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -229,7 +249,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
                   <div className="flex-1 card-iframe-container relative z-10">
                     {!loadedSources.has(index) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                        <div className="text-gray-500">Cargando...</div>
+                        <div className="text-gray-500">Cargando {source.title}...</div>
                       </div>
                     )}
                     <iframe

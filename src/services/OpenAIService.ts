@@ -10,7 +10,7 @@ export class OpenAIService {
 
   constructor() {
     this.proxyUrl = 'https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run';
-    this.authToken = 'secure-token-123';
+    this.authToken = '0204';
     this.model = 'gpt-4o-mini';
   }
 
@@ -45,6 +45,8 @@ Respond with JSON:
 }`;
 
     try {
+      console.log('Making request to OpenAI proxy:', this.proxyUrl);
+      
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -60,11 +62,16 @@ Respond with JSON:
         })
       });
 
+      console.log('Response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Error from proxy: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Error from proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('OpenAI response:', data);
       
       if (!data.choices?.[0]?.message?.content) {
         throw new Error('Invalid response structure');
@@ -131,6 +138,8 @@ Respond with JSON:
 }`;
 
     try {
+      console.log('Making batch analysis request to OpenAI proxy:', this.proxyUrl);
+      
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
@@ -146,11 +155,16 @@ Respond with JSON:
         })
       });
 
+      console.log('Batch analysis response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Error from proxy: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Batch analysis error response:', errorText);
+        throw new Error(`Error from proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('Batch analysis OpenAI response:', data);
       
       if (!data.choices?.[0]?.message?.content) {
         throw new Error('Invalid response structure');
