@@ -59,15 +59,6 @@ const Index = () => {
     <div className="min-h-screen bg-white">
       {/* Header Section */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
-        <div className="text-center mb-12">
-          <h1 className="text-8xl md:text-9xl font-black text-gray-900 mb-4">
-            AGI
-          </h1>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-700 mb-4">
-            DETECTOR EN TIEMPO REAL
-          </h2>
-        </div>
-
         {/* Big Red Button */}
         <Button
           onClick={handleScan}
@@ -82,9 +73,7 @@ const Index = () => {
               </>
             ) : (
               <>
-                <Search className="w-12 h-12" />
-                <span className="text-2xl font-bold">ESCANEAR</span>
-                <span className="text-sm">AHORA</span>
+                <span className="text-4xl font-bold">AGI</span>
               </>
             )}
           </div>
