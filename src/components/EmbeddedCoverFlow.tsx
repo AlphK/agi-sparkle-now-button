@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
@@ -335,6 +336,7 @@ const EmbeddedCoverFlow = () => {
           position: absolute;
           width: 600px;
           height: 800px;
+          cursor: pointer;
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
           background: white;
           border: 2px solid #e5e7eb;
@@ -360,6 +362,22 @@ const EmbeddedCoverFlow = () => {
           background: white;
           border-radius: 12px;
           position: relative;
+        }
+
+        .coverflow-card:not(.active) {
+          pointer-events: auto;
+        }
+
+        .coverflow-card.active {
+          pointer-events: auto;
+        }
+
+        .coverflow-card:not(.active) .card-iframe-container iframe {
+          pointer-events: none;
+        }
+
+        .coverflow-card.active .card-iframe-container iframe {
+          pointer-events: auto;
         }
 
         .card-dots {
@@ -393,16 +411,8 @@ const EmbeddedCoverFlow = () => {
                   data-card-index={index}
                   className={`coverflow-card ${isActive ? 'active' : ''}`}
                   style={cardStyle}
+                  onClick={isActive ? undefined : () => setActiveIndex(index)}
                 >
-                  {/* Invisible overlay for inactive cards */}
-                  {!isActive && (
-                    <div
-                      onClick={() => setActiveIndex(index)}
-                      className="absolute inset-0 z-20 cursor-pointer"
-                      aria-label={`Activate card ${index + 1}`}
-                    />
-                  )}
-
                   <div className="h-full p-4 flex flex-col relative overflow-hidden">
                     <div className="card-header mb-4 relative z-10">
                       <div className="card-dots">
@@ -422,9 +432,10 @@ const EmbeddedCoverFlow = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               refreshContent(index);
                             }}
-                            className="p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                            className="p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors z-20 relative"
                             title="Refresh content"
                           >
                             <RefreshCw className="w-4 h-4" />
@@ -432,9 +443,10 @@ const EmbeddedCoverFlow = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               window.open(source.originalUrl || source.url, '_blank');
                             }}
-                            className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors z-20 relative"
                             title="Open in new tab"
                           >
                             <ExternalLink className="w-4 h-4" />
