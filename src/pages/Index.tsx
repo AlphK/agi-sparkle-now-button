@@ -108,16 +108,35 @@ const Index = () => {
 
       {/* News Section */}
       {hasScanned && newsData.length > 0 && (
-        <div className="px-4 pb-16">
-          <div className="max-w-6xl mx-auto">
-            <div className="text-center mb-8">
-              <h3 className="text-3xl font-bold text-gray-900 mb-2">
-                Resultados del Escaneo
+        <div className="px-4 pb-16 animate-fade-in">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <h3 className="text-4xl font-bold text-gray-900 mb-4">
+                🔍 Resultados del Escaneo
               </h3>
-              <p className="text-gray-600">
+              <p className="text-xl text-gray-600 mb-2">
                 {newsData.length} noticias encontradas
               </p>
+              <div className="w-24 h-1 bg-red-500 mx-auto rounded-full"></div>
             </div>
+            
+            {/* Stats bar */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              {[
+                { label: 'Críticas', count: newsData.filter(n => n.relevance === 'critical').length, color: 'bg-red-500' },
+                { label: 'Altas', count: newsData.filter(n => n.relevance === 'high').length, color: 'bg-orange-500' },
+                { label: 'Medias', count: newsData.filter(n => n.relevance === 'medium').length, color: 'bg-yellow-500' },
+                { label: 'Bajas', count: newsData.filter(n => n.relevance === 'low').length, color: 'bg-blue-500' }
+              ].map((stat, i) => (
+                <div key={i} className="text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200">
+                  <div className={`text-2xl font-bold ${stat.color.replace('bg-', 'text-')}`}>
+                    {stat.count}
+                  </div>
+                  <div className="text-sm text-gray-600">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+            
             <NewsGrid news={newsData} />
           </div>
         </div>
