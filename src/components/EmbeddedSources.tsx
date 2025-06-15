@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { X, RefreshCw, ExternalLink } from 'lucide-react';
+import SitePreview from './SitePreview';
 
 interface NewsItem {
   title: string;
@@ -25,7 +26,6 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
     e.stopPropagation();
     setClosedTabs(prev => new Set([...prev, index]));
     
-    // Si cerramos la pestaña activa, cambiar a la primera disponible
     if (index === activeTab && visibleSources.length > 1) {
       const remainingSources = sources.filter((_, i) => i !== index && !closedTabs.has(i));
       if (remainingSources.length > 0) {
@@ -45,15 +45,6 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
       'Medium': '📝'
     };
     return icons[source] || '🌐';
-  };
-
-  const getRelevanceColor = (relevance: string) => {
-    switch (relevance) {
-      case 'critical': return 'border-red-500';
-      case 'high': return 'border-orange-500';
-      case 'medium': return 'border-yellow-500';
-      default: return 'border-blue-500';
-    }
   };
 
   if (visibleSources.length === 0) {
@@ -117,19 +108,10 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
         </button>
       </div>
 
-      {/* Content area */}
+      {/* Content area with SitePreview */}
       <div className="flex-1 bg-white relative overflow-hidden">
         {activeSource && !closedTabs.has(activeTab) && (
-          <div className="w-full h-full relative">
-            <div className={`absolute top-0 left-0 w-1 h-full ${getRelevanceColor(activeSource.relevance)} z-10`} />
-            <iframe
-              src={activeSource.url}
-              className="w-full h-full border-none"
-              title={activeSource.title}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation-by-user-activation"
-              loading="lazy"
-            />
-          </div>
+          <SitePreview item={activeSource} />
         )}
       </div>
 
@@ -140,7 +122,7 @@ const EmbeddedSources = ({ sources }: EmbeddedSourcesProps) => {
           <span>•</span>
           <span className="flex items-center space-x-1">
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span>Conexión segura</span>
+            <span>Preview mode - Click para abrir sitio original</span>
           </span>
         </div>
         <div className="flex items-center space-x-2">
