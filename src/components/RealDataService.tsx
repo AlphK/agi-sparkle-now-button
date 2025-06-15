@@ -1,5 +1,5 @@
-
 import { useToast } from '@/hooks/use-toast';
+import { OpenAIService } from '@/services/OpenAIService';
 
 interface NewsItem {
   title: string;
@@ -8,11 +8,17 @@ interface NewsItem {
   url: string;
   relevance: 'critical' | 'high' | 'medium' | 'low';
   category: string;
+  aiAnalysis?: {
+    reasoning: string;
+    keyInsights: string[];
+    agiProbability: number;
+  };
 }
 
 export class RealDataService {
   private static instance: RealDataService;
   private toast: any;
+  private openAIService?: OpenAIService;
 
   constructor(toast: any) {
     this.toast = toast;
@@ -23,6 +29,10 @@ export class RealDataService {
       RealDataService.instance = new RealDataService(toast);
     }
     return RealDataService.instance;
+  }
+
+  setOpenAIKey(apiKey: string) {
+    this.openAIService = OpenAIService.getInstance({ apiKey });
   }
 
   async fetchArXivPapers(): Promise<NewsItem[]> {
@@ -243,12 +253,19 @@ export class RealDataService {
     }
   }
 
-  async performAGIScan(): Promise<{ detected: boolean; confidence: number; sources: string[] }> {
+  async performIntelligentAGIScan(): Promise<{ 
+    detected: boolean; 
+    confidence: number; 
+    sources: string[];
+    reasoning: string;
+    newsWithAnalysis: NewsItem[];
+  }> {
     this.toast({
-      title: "🔍 Scanning multiple sources",
-      description: "ArXiv, Reddit, Hacker News, RSS feeds...",
+      title: "🧠 AI-Powered Analysis",
+      description: "Using OpenAI to analyze content for AGI indicators...",
     });
 
+    // Fetch all news sources
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
       this.fetchRedditMLPosts(),
@@ -257,9 +274,73 @@ export class RealDataService {
     ]);
 
     const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
+
+    if (!this.openAIService) {
+      // Fallback to basic analysis
+      return this.performBasicAGIScan(allNews);
+    }
+
+    try {
+      // Use OpenAI for intelligent analysis
+      const analysisInput = allNews.map(item => ({
+        title: item.title,
+        source: item.source
+      }));
+
+      const batchAnalysis = await this.openAIService.batchAnalyzeNews(analysisInput);
+
+      // Update news items with AI analysis
+      const newsWithAnalysis = allNews.map((item, index) => {
+        const analysis = batchAnalysis.items[index]?.analysis;
+        return {
+          ...item,
+          relevance: analysis?.relevance || item.relevance,
+          aiAnalysis: analysis ? {
+            reasoning: analysis.reasoning,
+            keyInsights: analysis.keyInsights,
+            agiProbability: analysis.agiProbability
+          } : undefined
+        };
+      });
+
+      // Sort by AI-determined relevance and probability
+      newsWithAnalysis.sort((a, b) => {
+        const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+        const aRelevance = relevanceOrder[a.relevance];
+        const bRelevance = relevanceOrder[b.relevance];
+        
+        if (aRelevance !== bRelevance) {
+          return aRelevance - bRelevance;
+        }
+        
+        // If same relevance, sort by AGI probability
+        const aProb = a.aiAnalysis?.agiProbability || 0;
+        const bProb = b.aiAnalysis?.agiProbability || 0;
+        return bProb - aProb;
+      });
+
+      return {
+        detected: batchAnalysis.overallAgiDetection.detected,
+        confidence: batchAnalysis.overallAgiDetection.confidence,
+        reasoning: batchAnalysis.overallAgiDetection.reasoning,
+        sources: ['ArXiv', 'Reddit', 'Hacker News', 'RSS Feeds'],
+        newsWithAnalysis
+      };
+
+    } catch (error) {
+      console.error('OpenAI analysis failed, falling back to basic scan:', error);
+      return this.performBasicAGIScan(allNews);
+    }
+  }
+
+  private performBasicAGIScan(allNews: NewsItem[]): { 
+    detected: boolean; 
+    confidence: number; 
+    sources: string[];
+    reasoning: string;
+    newsWithAnalysis: NewsItem[];
+  } {
     const criticalNews = allNews.filter(item => item.relevance === 'critical');
-    
-    // Análisis simple de detección de AGI
     const agiKeywords = ['agi', 'artificial general intelligence', 'consciousness', 'sentient'];
     const hasAGIIndicators = allNews.some(item => 
       agiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
@@ -270,7 +351,22 @@ export class RealDataService {
     return {
       detected: confidence > 80,
       confidence,
-      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'DeepMind', 'RSS Feeds']
+      reasoning: `Found ${criticalNews.length} critical items with ${hasAGIIndicators ? 'AGI' : 'no AGI'} indicators`,
+      sources: ['ArXiv', 'Reddit', 'Hacker News', 'RSS Feeds'],
+      newsWithAnalysis: allNews.sort((a, b) => {
+        const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+        return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
+      })
+    };
+  }
+
+  async performAGIScan(): Promise<{ detected: boolean; confidence: number; sources: string[] }> {
+    // Keep existing method for backward compatibility
+    const result = await this.performIntelligentAGIScan();
+    return {
+      detected: result.detected,
+      confidence: result.confidence,
+      sources: result.sources
     };
   }
 }

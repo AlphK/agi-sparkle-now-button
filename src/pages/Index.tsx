@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Loader2, Zap, Brain, Sparkles } from 'lucide-react';
+import { Loader2, Zap, Brain, Sparkles, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
 import CoverFlowNews from '@/components/CoverFlowNews';
@@ -15,6 +16,11 @@ interface NewsItem {
   url: string;
   relevance: 'critical' | 'high' | 'medium' | 'low';
   category: string;
+  aiAnalysis?: {
+    reasoning: string;
+    keyInsights: string[];
+    agiProbability: number;
+  };
 }
 
 const Index = () => {
@@ -24,6 +30,9 @@ const Index = () => {
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [showScrollMessage, setShowScrollMessage] = useState(false);
+  const [openAIKey, setOpenAIKey] = useState('');
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [usingAI, setUsingAI] = useState(false);
   const { toast } = useToast();
 
   const handleScan = async () => {
@@ -33,49 +42,53 @@ const Index = () => {
     try {
       const dataService = RealDataService.getInstance(toast);
       
-      // Fetch all data in parallel
-      const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
-        dataService.fetchArXivPapers(),
-        dataService.fetchRedditMLPosts(),
-        dataService.fetchHackerNewsPosts(),
-        dataService.fetchRSSFeeds()
-      ]);
-      
-      const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
-        .sort((a, b) => {
-          const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
-          return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
+      // Set OpenAI key if provided
+      if (openAIKey.trim()) {
+        dataService.setOpenAIKey(openAIKey.trim());
+        setUsingAI(true);
+      }
+
+      let scanResult;
+      if (usingAI && openAIKey.trim()) {
+        // Use intelligent AI-powered scan
+        scanResult = await dataService.performIntelligentAGIScan();
+        setNewsData(scanResult.newsWithAnalysis);
+        
+        toast({
+          title: "🧠 AI Analysis Complete",
+          description: `${scanResult.reasoning}`,
         });
+      } else {
+        // Use basic scan
+        const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
+          dataService.fetchArXivPapers(),
+          dataService.fetchRedditMLPosts(),
+          dataService.fetchHackerNewsPosts(),
+          dataService.fetchRSSFeeds()
+        ]);
+        
+        const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
+          .sort((a, b) => {
+            const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
+            return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
+          });
+        
+        setNewsData(allNews);
+        scanResult = { detected: false, confidence: 0 };
+      }
       
-      console.log('All news fetched:', allNews.length, allNews);
-      setNewsData(allNews);
+      console.log('Scan complete:', scanResult, newsData.length);
       setHasScanned(true);
 
-      // Detectar AGI
+      // AGI Detection Logic
       if (testMode) {
-        setTimeout(() => {
-          setAgiDetected(true);
-        }, 1000);
+        setTimeout(() => setAgiDetected(true), 1000);
+      } else if (scanResult.detected) {
+        setTimeout(() => setAgiDetected(true), 1000);
       } else {
-        const hasCriticalNews = allNews.some(item => item.relevance === 'critical');
-        const hasAGIKeywords = allNews.some(item => 
-          item.title.toLowerCase().includes('agi') || 
-          item.title.toLowerCase().includes('artificial general intelligence') ||
-          item.title.toLowerCase().includes('consciousness') ||
-          item.title.toLowerCase().includes('sentient')
-        );
-
-        if (hasCriticalNews && hasAGIKeywords) {
-          setTimeout(() => {
-            setAgiDetected(true);
-          }, 1000);
-        } else {
-          // Mostrar mensaje de scroll solo por 4 segundos
-          setShowScrollMessage(true);
-          setTimeout(() => {
-            setShowScrollMessage(false);
-          }, 4000);
-        }
+        // Show scroll message for 4 seconds
+        setShowScrollMessage(true);
+        setTimeout(() => setShowScrollMessage(false), 4000);
       }
       
     } catch (error) {
@@ -121,21 +134,51 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Animación de detección AGI */}
+      {/* AGI Detection Animation */}
       <AGIDetectionAnimation 
         isDetected={agiDetected} 
         onClose={() => setAgiDetected(false)} 
       />
 
-      {/* Header Section - Siempre visible */}
+      {/* Header Section */}
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
-        {/* Interruptor temporal para testing */}
-        <div className="absolute top-4 right-4 flex items-center space-x-2 bg-gray-100 p-2 rounded-lg">
-          <span className="text-sm">Test AGI</span>
-          <Switch 
-            checked={testMode} 
-            onCheckedChange={setTestMode}
-          />
+        {/* Controls */}
+        <div className="absolute top-4 right-4 flex flex-col space-y-2">
+          {/* Test Mode Toggle */}
+          <div className="flex items-center space-x-2 bg-gray-100 p-2 rounded-lg">
+            <span className="text-sm">Test AGI</span>
+            <Switch checked={testMode} onCheckedChange={setTestMode} />
+          </div>
+          
+          {/* AI Enhancement Toggle */}
+          <div className="flex items-center space-x-2 bg-blue-50 p-2 rounded-lg">
+            <Brain className="w-4 h-4 text-blue-600" />
+            <span className="text-sm">AI Enhanced</span>
+            <Switch 
+              checked={showKeyInput} 
+              onCheckedChange={setShowKeyInput}
+            />
+          </div>
+          
+          {/* OpenAI Key Input */}
+          {showKeyInput && (
+            <div className="bg-white p-3 rounded-lg shadow-lg border max-w-xs">
+              <div className="flex items-center space-x-2 mb-2">
+                <Key className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium">OpenAI API Key</span>
+              </div>
+              <Input
+                type="password"
+                placeholder="sk-..."
+                value={openAIKey}
+                onChange={(e) => setOpenAIKey(e.target.value)}
+                className="text-xs"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                For intelligent AGI detection
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Big Red Button */}
@@ -153,7 +196,15 @@ const Index = () => {
           </div>
         </Button>
 
-        {/* Mensaje temporal de scroll - Solo aparece 4 segundos después del escaneo */}
+        {/* Status Indicator */}
+        {usingAI && openAIKey && (
+          <div className="mt-4 flex items-center space-x-2 text-blue-600">
+            <Brain className="w-5 h-5" />
+            <span className="text-sm font-medium">AI-Enhanced Detection Active</span>
+          </div>
+        )}
+
+        {/* Scroll Message */}
         {showScrollMessage && (
           <div className="mt-8 text-center animate-fade-in">
             <p className="text-gray-600 text-lg mb-3">Latest AI news below ↓</p>
@@ -164,7 +215,7 @@ const Index = () => {
         )}
       </div>
 
-      {/* Cover Flow News Section - Aparece abajo después del scan solo si no hay AGI */}
+      {/* Cover Flow News Section */}
       {hasScanned && !agiDetected && newsData.length > 0 && (
         <div className="min-h-screen">
           <CoverFlowNews sources={newsData} />
