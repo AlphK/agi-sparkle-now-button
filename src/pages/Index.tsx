@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
 import StackedSites from '@/components/StackedSites';
@@ -21,6 +22,7 @@ const Index = () => {
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
   const [hasScanned, setHasScanned] = useState(false);
   const [agiDetected, setAgiDetected] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const { toast } = useToast();
 
   const handleScan = async () => {
@@ -45,19 +47,25 @@ const Index = () => {
       setNewsData(allNews);
       setHasScanned(true);
 
-      // Simular detección de AGI basada en contenido crítico
-      const hasCriticalNews = allNews.some(item => item.relevance === 'critical');
-      const hasAGIKeywords = allNews.some(item => 
-        item.title.toLowerCase().includes('agi') || 
-        item.title.toLowerCase().includes('artificial general intelligence') ||
-        item.title.toLowerCase().includes('consciousness') ||
-        item.title.toLowerCase().includes('sentient')
-      );
-
-      if (hasCriticalNews && hasAGIKeywords) {
+      // Detectar AGI - ya sea por modo test o por contenido real
+      if (testMode) {
         setTimeout(() => {
           setAgiDetected(true);
         }, 1000);
+      } else {
+        const hasCriticalNews = allNews.some(item => item.relevance === 'critical');
+        const hasAGIKeywords = allNews.some(item => 
+          item.title.toLowerCase().includes('agi') || 
+          item.title.toLowerCase().includes('artificial general intelligence') ||
+          item.title.toLowerCase().includes('consciousness') ||
+          item.title.toLowerCase().includes('sentient')
+        );
+
+        if (hasCriticalNews && hasAGIKeywords) {
+          setTimeout(() => {
+            setAgiDetected(true);
+          }, 1000);
+        }
       }
       
     } catch (error) {
@@ -80,32 +88,41 @@ const Index = () => {
         onClose={() => setAgiDetected(false)} 
       />
 
-      {!hasScanned ? (
-        /* Header Section */
-        <div className="flex flex-col items-center justify-center min-h-screen px-4">
-          {/* Big Red Button */}
-          <Button
-            onClick={handleScan}
-            disabled={isScanning}
-            className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70"
-          >
-            <div className="flex flex-col items-center space-y-3">
-              {isScanning ? (
-                <>
-                  <Loader2 className="w-12 h-12 animate-spin" />
-                  <span className="text-xl font-bold">BUSCANDO...</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-4xl font-bold">AGI</span>
-                </>
-              )}
-            </div>
-          </Button>
+      {/* Header Section - Siempre visible */}
+      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        {/* Interruptor temporal para testing */}
+        <div className="absolute top-4 right-4 flex items-center space-x-2 bg-gray-100 p-2 rounded-lg">
+          <span className="text-sm">Test AGI</span>
+          <Switch 
+            checked={testMode} 
+            onCheckedChange={setTestMode}
+          />
         </div>
-      ) : (
-        /* Stacked Sites Section */
-        <StackedSites sources={newsData} />
+
+        {/* Big Red Button */}
+        <Button
+          onClick={handleScan}
+          disabled={isScanning}
+          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70"
+        >
+          <div className="flex flex-col items-center space-y-3">
+            {isScanning ? (
+              <>
+                <Loader2 className="w-12 h-12 animate-spin" />
+                <span className="text-xl font-bold">SCANNING...</span>
+              </>
+            ) : (
+              <span className="text-2xl font-bold">Not yet</span>
+            )}
+          </div>
+        </Button>
+      </div>
+
+      {/* Stacked Sites Section - Aparece abajo después del scan */}
+      {hasScanned && (
+        <div className="min-h-screen">
+          <StackedSites sources={newsData} />
+        </div>
       )}
     </div>
   );
