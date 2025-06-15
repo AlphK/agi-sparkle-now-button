@@ -4,7 +4,7 @@ import { Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { RealDataService } from '@/components/RealDataService';
-import NewsGrid from '@/components/NewsGrid';
+import EmbeddedSources from '@/components/EmbeddedSources';
 
 interface NewsItem {
   title: string;
@@ -43,11 +43,6 @@ const Index = () => {
       setNewsData(allNews);
       setHasScanned(true);
       
-      toast({
-        title: "✅ Análisis completado",
-        description: `Se encontraron ${allNews.length} noticias relevantes`,
-      });
-      
     } catch (error) {
       console.error('Error scanning:', error);
       toast({
@@ -71,9 +66,6 @@ const Index = () => {
           <h2 className="text-2xl md:text-3xl font-bold text-gray-700 mb-4">
             DETECTOR EN TIEMPO REAL
           </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Escanea ArXiv, Reddit y Hacker News en busca de avances en inteligencia artificial
-          </p>
         </div>
 
         {/* Big Red Button */}
@@ -106,39 +98,10 @@ const Index = () => {
         )}
       </div>
 
-      {/* News Section */}
+      {/* Embedded Sources Section */}
       {hasScanned && newsData.length > 0 && (
-        <div className="px-4 pb-16 animate-fade-in">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12">
-              <h3 className="text-4xl font-bold text-gray-900 mb-4">
-                🔍 Resultados del Escaneo
-              </h3>
-              <p className="text-xl text-gray-600 mb-2">
-                {newsData.length} noticias encontradas
-              </p>
-              <div className="w-24 h-1 bg-red-500 mx-auto rounded-full"></div>
-            </div>
-            
-            {/* Stats bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              {[
-                { label: 'Críticas', count: newsData.filter(n => n.relevance === 'critical').length, color: 'bg-red-500' },
-                { label: 'Altas', count: newsData.filter(n => n.relevance === 'high').length, color: 'bg-orange-500' },
-                { label: 'Medias', count: newsData.filter(n => n.relevance === 'medium').length, color: 'bg-yellow-500' },
-                { label: 'Bajas', count: newsData.filter(n => n.relevance === 'low').length, color: 'bg-blue-500' }
-              ].map((stat, i) => (
-                <div key={i} className="text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200">
-                  <div className={`text-2xl font-bold ${stat.color.replace('bg-', 'text-')}`}>
-                    {stat.count}
-                  </div>
-                  <div className="text-sm text-gray-600">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-            
-            <NewsGrid news={newsData} />
-          </div>
+        <div className="w-full animate-fade-in">
+          <EmbeddedSources sources={newsData} />
         </div>
       )}
     </div>
