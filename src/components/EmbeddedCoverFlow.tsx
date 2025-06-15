@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
@@ -336,7 +335,6 @@ const EmbeddedCoverFlow = () => {
           position: absolute;
           width: 600px;
           height: 800px;
-          cursor: pointer;
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
           background: white;
           border: 2px solid #e5e7eb;
@@ -362,14 +360,6 @@ const EmbeddedCoverFlow = () => {
           background: white;
           border-radius: 12px;
           position: relative;
-        }
-
-        .coverflow-card:not(.active) {
-          pointer-events: none;
-        }
-
-        .coverflow-card.active {
-          pointer-events: auto;
         }
 
         .card-dots {
@@ -403,8 +393,16 @@ const EmbeddedCoverFlow = () => {
                   data-card-index={index}
                   className={`coverflow-card ${isActive ? 'active' : ''}`}
                   style={cardStyle}
-                  onClick={isActive ? undefined : () => setActiveIndex(index)}
                 >
+                  {/* Invisible overlay for inactive cards */}
+                  {!isActive && (
+                    <div
+                      onClick={() => setActiveIndex(index)}
+                      className="absolute inset-0 z-20 cursor-pointer"
+                      aria-label={`Activate card ${index + 1}`}
+                    />
+                  )}
+
                   <div className="h-full p-4 flex flex-col relative overflow-hidden">
                     <div className="card-header mb-4 relative z-10">
                       <div className="card-dots">
