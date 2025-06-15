@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 import { AnalysisResultSchema, BatchAnalysisResultSchema, type AnalysisResult, type BatchAnalysisResult } from '@/schemas/openai';
 import { sanitizeContent } from '@/utils/sanitizer';
@@ -25,27 +26,27 @@ export class OpenAIService {
     const sanitizedTitle = sanitizeContent.text(title);
     const sanitizedSource = sanitizeContent.text(source);
 
-    const prompt = `Analyze this AI/tech news headline for AGI relevance:
+    const prompt = `Analiza este titular de noticias AI/tech para relevancia AGI:
 
-Title: "${sanitizedTitle}"
-Source: ${sanitizedSource}
+Título: "${sanitizedTitle}"
+Fuente: ${sanitizedSource}
 
-Evaluate on a scale where:
-- critical: Breakthrough AGI achievements, consciousness claims, human-level AI
-- high: Major AI capabilities, reasoning advances, significant benchmarks
-- medium: Standard AI research, incremental improvements
-- low: Tangentially related to AI
+Evalúa en una escala donde:
+- critical: Avances revolucionarios AGI, claims de consciencia, IA nivel humano
+- high: Capacidades mayores de IA, avances en razonamiento, benchmarks importantes
+- medium: Investigación estándar IA, mejoras incrementales
+- low: Tangencialmente relacionado con IA
 
-Respond with JSON:
+Responde con JSON:
 {
   "relevance": "critical|high|medium|low",
   "agiProbability": 0-100,
-  "reasoning": "brief explanation",
+  "reasoning": "explicación breve",
   "keyInsights": ["insight1", "insight2"]
 }`;
 
     try {
-      console.log('Making request to OpenAI proxy:', this.proxyUrl);
+      console.log('Haciendo petición al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -62,26 +63,26 @@ Respond with JSON:
         })
       });
 
-      console.log('Response status:', response.status);
+      console.log('Estado de respuesta:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Error from proxy: ${response.statusText} - ${errorText}`);
+        console.error('Respuesta de error:', errorText);
+        throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('OpenAI response:', data);
+      console.log('Respuesta OpenAI:', data);
       
       if (!data.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response structure');
+        throw new Error('Estructura de respuesta inválida');
       }
 
       let parsedContent;
       try {
         parsedContent = JSON.parse(data.choices[0].message.content);
       } catch {
-        throw new Error('Invalid JSON in response');
+        throw new Error('JSON inválido en respuesta');
       }
 
       const validatedAnalysis = AnalysisResultSchema.parse(parsedContent);
@@ -93,7 +94,7 @@ Respond with JSON:
         keyInsights: validatedAnalysis.keyInsights.map(insight => sanitizeContent.text(insight))
       };
     } catch (error) {
-      console.error('OpenAI analysis failed:', error);
+      console.error('Análisis OpenAI falló:', error);
       return this.fallbackAnalysis(sanitizedTitle);
     }
   }
@@ -106,39 +107,39 @@ Respond with JSON:
 
     const titles = sanitizedItems.map(item => `- ${item.title} (${item.source})`).join('\n');
     
-    const prompt = `Analyze these AI news headlines for AGI detection:
+    const prompt = `Analiza estos titulares de noticias AI para detección de AGI:
 
 ${titles}
 
-For each headline, determine:
-1. Relevance level (critical/high/medium/low)
-2. AGI probability (0-100)
-3. Brief reasoning
+Para cada titular, determina:
+1. Nivel de relevancia (critical/high/medium/low)
+2. Probabilidad AGI (0-100)
+3. Razonamiento breve
 
-Then provide overall AGI detection assessment.
+Luego proporciona evaluación general de detección AGI.
 
-Respond with JSON:
+Responde con JSON:
 {
   "items": [
     {
-      "title": "headline",  
+      "title": "titular",  
       "analysis": {
-        "relevance": "level",
-        "agiProbability": number,
-        "reasoning": "explanation",
+        "relevance": "nivel",
+        "agiProbability": numero,
+        "reasoning": "explicación",
         "keyInsights": ["insight1"]
       }
     }
   ],
   "overallAgiDetection": {
     "detected": boolean,
-    "confidence": number,
-    "reasoning": "overall assessment"
+    "confidence": numero,
+    "reasoning": "evaluación general"
   }
 }`;
 
     try {
-      console.log('Making batch analysis request to OpenAI proxy:', this.proxyUrl);
+      console.log('Haciendo análisis batch al proxy OpenAI:', this.proxyUrl);
       
       const response = await fetch(`${this.proxyUrl}/v1/chat/completions`, {
         method: 'POST',
@@ -155,26 +156,26 @@ Respond with JSON:
         })
       });
 
-      console.log('Batch analysis response status:', response.status);
+      console.log('Estado de respuesta análisis batch:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Batch analysis error response:', errorText);
-        throw new Error(`Error from proxy: ${response.statusText} - ${errorText}`);
+        console.error('Error respuesta análisis batch:', errorText);
+        throw new Error(`Error del proxy: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      console.log('Batch analysis OpenAI response:', data);
+      console.log('Respuesta análisis batch OpenAI:', data);
       
       if (!data.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response structure');
+        throw new Error('Estructura de respuesta inválida');
       }
 
       let parsedContent;
       try {
         parsedContent = JSON.parse(data.choices[0].message.content);
       } catch {
-        throw new Error('Invalid JSON in response');
+        throw new Error('JSON inválido en respuesta');
       }
 
       const validatedResult = BatchAnalysisResultSchema.parse(parsedContent);
@@ -196,7 +197,7 @@ Respond with JSON:
         }
       };
     } catch (error) {
-      console.error('Batch analysis failed:', error);
+      console.error('Análisis batch falló:', error);
       return this.fallbackBatchAnalysis(sanitizedItems);
     }
   }

@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Loader2, Zap, Brain, Sparkles, Shield } from 'lucide-react';
+import { Brain, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
@@ -29,27 +30,35 @@ const Index = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
-  const [showScrollMessage, setShowScrollMessage] = useState(false);
   const [useAI, setUseAI] = useState(false);
   const { toast } = useToast();
 
   const handleScan = async () => {
     setIsScanning(true);
-    setShowScrollMessage(false);
+    setNewsData([]);
+    setHasScanned(false);
+    setAgiDetected(false);
     
     try {
       const dataService = RealDataService.getInstance(toast);
       
       let scanResult;
       if (useAI) {
+        console.log('Iniciando búsqueda inteligente de AGI...');
         scanResult = await dataService.performIntelligentAGIScan();
         setNewsData(scanResult.newsWithAnalysis);
         
         toast({
-          title: "🧠 AI Analysis Complete",
+          title: "🧠 Análisis IA Completado",
           description: `${scanResult.reasoning}`,
         });
+
+        // Verificar si se detectó AGI
+        if (scanResult.detected) {
+          setTimeout(() => setAgiDetected(true), 1000);
+        }
       } else {
+        console.log('Iniciando búsqueda básica...');
         const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
           dataService.fetchArXivPapers(),
           dataService.fetchRedditMLPosts(),
@@ -64,26 +73,29 @@ const Index = () => {
           });
         
         setNewsData(allNews);
-        scanResult = { detected: false, confidence: 0 };
+        
+        // Análisis básico de AGI
+        const criticalItems = allNews.filter(item => item.relevance === 'critical');
+        const agiKeywords = ['agi', 'artificial general intelligence', 'superintelligence', 'consciousness'];
+        const hasAgiSigns = criticalItems.some(item => 
+          agiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
+        );
+        
+        scanResult = { detected: hasAgiSigns, confidence: hasAgiSigns ? 75 : 0 };
       }
-      
-      console.log('Scan complete:', scanResult, newsData.length);
-      setHasScanned(true);
 
       if (testMode) {
         setTimeout(() => setAgiDetected(true), 1000);
-      } else if (scanResult.detected) {
-        setTimeout(() => setAgiDetected(true), 1000);
-      } else {
-        setShowScrollMessage(true);
-        setTimeout(() => setShowScrollMessage(false), 4000);
       }
       
+      console.log('Búsqueda completada:', scanResult, newsData.length);
+      setHasScanned(true);
+      
     } catch (error) {
-      console.error('Error scanning:', error);
+      console.error('Error en la búsqueda:', error);
       toast({
         title: "❌ Error",
-        description: "Failed to connect to sources. Please try again.",
+        description: "Error al conectar con las fuentes. Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -95,16 +107,11 @@ const Index = () => {
     if (isScanning) {
       return (
         <div className="flex flex-col items-center space-y-3">
-          <div className="relative">
-            <Brain className="w-12 h-12 animate-pulse text-blue-300" />
-            <Sparkles className="w-6 h-6 absolute -top-2 -right-2 animate-bounce text-yellow-300" />
-            <Zap className="w-4 h-4 absolute -bottom-1 -left-1 animate-ping text-green-300" />
-          </div>
           <div className="text-center">
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-pulse">
-              ANALYZING
+            <span className="text-xl font-bold text-white">
+              ANALIZANDO
             </span>
-            <div className="flex justify-center space-x-1 mt-1">
+            <div className="flex justify-center space-x-1 mt-2">
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
@@ -133,8 +140,8 @@ const Index = () => {
           <div className="absolute top-16 left-4 right-4 max-w-md mx-auto">
             <SecurityAlert
               type="info"
-              title="Secure AI Analysis"
-              message="Using secure proxy connection for AI-powered AGI detection."
+              title="Análisis IA Seguro"
+              message="Usando conexión proxy segura para detección de AGI con IA."
             />
           </div>
         )}
@@ -147,7 +154,7 @@ const Index = () => {
           
           <div className="flex items-center space-x-2 bg-blue-50 p-2 rounded-lg">
             <Brain className="w-4 h-4 text-blue-600" />
-            <span className="text-sm">AI Enhanced</span>
+            <span className="text-sm">IA Mejorada</span>
             <Switch 
               checked={useAI} 
               onCheckedChange={setUseAI}
@@ -158,38 +165,24 @@ const Index = () => {
         <Button
           onClick={handleScan}
           disabled={isScanning}
-          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 relative overflow-hidden"
+          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70"
         >
-          {isScanning && (
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 animate-spin rounded-full"></div>
-          )}
-          <div className="relative z-10">
-            {getButtonContent()}
-          </div>
+          {getButtonContent()}
         </Button>
 
         {useAI && (
           <div className="mt-4 flex items-center space-x-2 text-blue-600">
             <Shield className="w-5 h-5" />
-            <span className="text-sm font-medium">Secure AI Detection Active</span>
-          </div>
-        )}
-
-        {showScrollMessage && (
-          <div className="mt-8 text-center animate-fade-in">
-            <p className="text-gray-600 text-lg mb-3">Explora sitios de AI abajo ↓</p>
-            <div className="w-8 h-8 mx-auto border-2 border-gray-400 rounded-full flex items-center justify-center animate-bounce">
-              <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
-            </div>
+            <span className="text-sm font-medium">Detección IA Segura Activa</span>
           </div>
         )}
       </div>
 
-      {/* Carrusel de sitios de AI (siempre visible) */}
+      {/* Carrusel de sitios de AI */}
       <EmbeddedCoverFlow />
 
-      {/* Sección de últimas noticias de AGI (solo después del scan con AI) */}
-      {hasScanned && useAI && newsData.length > 0 && (
+      {/* Sección de análisis AGI */}
+      {hasScanned && newsData.length > 0 && (
         <LatestAGINews newsData={newsData} agiDetected={agiDetected} />
       )}
     </div>

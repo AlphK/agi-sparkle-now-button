@@ -8,10 +8,6 @@ interface NewsSource {
   category: string;
 }
 
-interface EmbeddedCoverFlowProps {
-  sources?: NewsSource[];
-}
-
 const VERIFIED_NEWS_SOURCES: NewsSource[] = [
   {
     title: "Hacker News AI",
@@ -19,7 +15,7 @@ const VERIFIED_NEWS_SOURCES: NewsSource[] = [
     category: "Tech"
   },
   {
-    title: "Wired AI",
+    title: "Wired AI", 
     url: "https://www.wired.com/tag/artificial-intelligence/",
     category: "News"
   },
@@ -40,7 +36,7 @@ const VERIFIED_NEWS_SOURCES: NewsSource[] = [
   }
 ];
 
-const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlowProps) => {
+const EmbeddedCoverFlow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedSources, setLoadedSources] = useState<Set<number>>(new Set());
 
@@ -53,73 +49,60 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
         zIndex: 10,
         opacity: 1
       };
-    } else if (diff === 1 || (diff === -(sources.length - 1))) {
+    } else if (diff === 1 || (diff === -(VERIFIED_NEWS_SOURCES.length - 1))) {
       return {
-        transform: 'translateX(220px) rotateY(-40deg) scale(0.8) translateZ(0px)',
+        transform: 'translateX(220px) rotateY(-40deg) scale(0.8)',
         zIndex: 5,
         opacity: 0.7
       };
-    } else if (diff === -1 || (diff === (sources.length - 1))) {
+    } else if (diff === -1 || (diff === (VERIFIED_NEWS_SOURCES.length - 1))) {
       return {
-        transform: 'translateX(-220px) rotateY(40deg) scale(0.8) translateZ(0px)',
+        transform: 'translateX(-220px) rotateY(40deg) scale(0.8)',
         zIndex: 5,
         opacity: 0.7
-      };
-    } else if (diff === 2 || diff === -(sources.length - 2)) {
-      return {
-        transform: 'translateX(320px) rotateY(-50deg) scale(0.6) translateZ(-80px)',
-        zIndex: 2,
-        opacity: 0.4
-      };
-    } else if (diff === -2 || diff === (sources.length - 2)) {
-      return {
-        transform: 'translateX(-320px) rotateY(50deg) scale(0.6) translateZ(-80px)',
-        zIndex: 2,
-        opacity: 0.4
       };
     } else {
       return {
-        transform: 'translateX(400px) rotateY(-60deg) scale(0.4) translateZ(-160px)',
+        transform: 'translateX(400px) rotateY(-60deg) scale(0.4)',
         zIndex: 1,
         opacity: 0.2
       };
     }
   };
 
-  const handleCardClick = (index: number) => {
-    setActiveIndex(index);
-  };
-
   const nextSlide = () => {
-    setActiveIndex((prev) => (prev + 1) % sources.length);
+    setActiveIndex((prev) => (prev + 1) % VERIFIED_NEWS_SOURCES.length);
   };
 
   const prevSlide = () => {
-    setActiveIndex((prev) => (prev - 1 + sources.length) % sources.length);
+    setActiveIndex((prev) => (prev - 1 + VERIFIED_NEWS_SOURCES.length) % VERIFIED_NEWS_SOURCES.length);
   };
 
   const handleIframeLoad = (index: number) => {
     setLoadedSources(prev => new Set(prev).add(index));
-    console.log(`Cargó: ${sources[index].title}`);
+    console.log(`Cargó: ${VERIFIED_NEWS_SOURCES[index].title}`);
   };
 
   const handleIframeError = (index: number, error: any) => {
-    console.error(`Error en ${sources[index].title}:`, error);
+    console.error(`Error en ${VERIFIED_NEWS_SOURCES[index].title}:`, error);
   };
 
-  // Manejar scroll para navegación
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
       const target = event.target as Element;
-      const activeCard = document.querySelector('.coverflow-card.active');
-      const isOnActiveCard = target.closest('.coverflow-card') === activeCard;
+      const carouselElement = document.querySelector('.coverflow-container');
       
-      if (!isOnActiveCard) {
-        event.preventDefault();
-        if (event.deltaY > 0) {
-          nextSlide();
-        } else {
-          prevSlide();
+      if (carouselElement && carouselElement.contains(target)) {
+        const activeCard = document.querySelector('.coverflow-card.active .card-iframe-container');
+        const isScrollingInActiveCard = activeCard && activeCard.contains(target);
+        
+        if (!isScrollingInActiveCard) {
+          event.preventDefault();
+          if (event.deltaY > 0) {
+            nextSlide();
+          } else {
+            prevSlide();
+          }
         }
       }
     };
@@ -142,14 +125,28 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
   }, []);
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white p-8 relative overflow-hidden">
+    <div className="flex items-center justify-center min-h-screen bg-white p-8 relative overflow-hidden coverflow-container">
       <style>{`
-        :root {
-          --card-width: 600px;
-          --card-height: 800px;
-          --spacing: 220px;
-          --rotation: 40deg;
-          --transition: 0.3s ease-in-out;
+        .coverflow-card {
+          position: absolute;
+          width: 600px;
+          height: 800px;
+          cursor: pointer;
+          transition: all 0.3s ease-in-out;
+          background: white;
+          border: 2px solid #e5e7eb;
+          border-radius: 16px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          transform-style: preserve-3d;
+        }
+
+        .coverflow-card:hover {
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .coverflow-card.active {
+          border-color: #3b82f6;
+          box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25);
         }
 
         .card-iframe-container {
@@ -184,33 +181,11 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
         .card-dot.red { background-color: #ef4444; }
         .card-dot.yellow { background-color: #eab308; }
         .card-dot.green { background-color: #22c55e; }
-
-        .coverflow-card {
-          position: absolute;
-          width: var(--card-width);
-          height: var(--card-height);
-          cursor: pointer;
-          transition: all var(--transition);
-          background: white;
-          border: 2px solid #e5e7eb;
-          border-radius: 16px;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-          transform-style: preserve-3d;
-        }
-
-        .coverflow-card:hover {
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-        }
-
-        .coverflow-card.active {
-          border-color: #3b82f6;
-          box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25);
-        }
       `}</style>
 
       <div className="w-full max-w-6xl relative" style={{ perspective: '1200px' }}>
-        <div className="relative h-96 flex items-center justify-center" style={{ height: 'var(--card-height)' }}>
-          {sources.map((source, index) => {
+        <div className="relative h-96 flex items-center justify-center" style={{ height: '800px' }}>
+          {VERIFIED_NEWS_SOURCES.map((source, index) => {
             const cardStyle = getCardTransform(index);
             const isActive = index === activeIndex;
             
@@ -219,7 +194,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
                 key={index}
                 className={`coverflow-card ${isActive ? 'active' : ''}`}
                 style={cardStyle}
-                onClick={() => handleCardClick(index)}
+                onClick={() => setActiveIndex(index)}
               >
                 <div className="h-full p-4 flex flex-col relative overflow-hidden">
                   <div className="card-header mb-4 relative z-10">
@@ -248,19 +223,20 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
 
                   <div className="flex-1 card-iframe-container relative z-10">
                     {!loadedSources.has(index) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
                         <div className="text-gray-500">Cargando {source.title}...</div>
                       </div>
                     )}
                     <iframe
                       src={source.url}
                       loading="lazy"
-                      sandbox="allow-same-origin allow-scripts"
-                      referrerPolicy="no-referrer"
+                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                      referrerPolicy="no-referrer-when-downgrade"
                       onLoad={() => handleIframeLoad(index)}
                       onError={(e) => handleIframeError(index, e)}
                       style={{ 
-                        display: loadedSources.has(index) ? 'block' : 'none'
+                        display: 'block',
+                        visibility: loadedSources.has(index) ? 'visible' : 'hidden'
                       }}
                     />
                   </div>
@@ -271,7 +247,7 @@ const EmbeddedCoverFlow = ({ sources = VERIFIED_NEWS_SOURCES }: EmbeddedCoverFlo
         </div>
 
         <div className="flex justify-center mt-8 space-x-2">
-          {sources.map((_, index) => (
+          {VERIFIED_NEWS_SOURCES.map((_, index) => (
             <button
               key={index}
               onClick={() => setActiveIndex(index)}
