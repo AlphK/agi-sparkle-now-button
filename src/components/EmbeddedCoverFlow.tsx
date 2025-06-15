@@ -173,8 +173,7 @@ const EmbeddedCoverFlow = () => {
             width: '100%', 
             height: '100%', 
             border: 'none', 
-            borderRadius: '12px',
-            pointerEvents: isActive ? 'auto' : 'none'
+            borderRadius: '12px'
           }}
           sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
           referrerPolicy="no-referrer"
@@ -248,8 +247,12 @@ const EmbeddedCoverFlow = () => {
           position: relative;
         }
 
-        .coverflow-card.active .card-iframe-container {
-          overflow: auto;
+        .card-iframe-container iframe {
+          pointer-events: auto;
+        }
+
+        .coverflow-card:not(.active) .card-iframe-container iframe {
+          pointer-events: none;
         }
       `}</style>
 
