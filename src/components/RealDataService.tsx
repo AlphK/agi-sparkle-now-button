@@ -1,3 +1,4 @@
+
 import { useToast } from '@/hooks/use-toast';
 import { OpenAIService } from '@/services/OpenAIService';
 import { sanitizeContent } from '@/utils/sanitizer';
@@ -21,7 +22,7 @@ export class RealDataService {
   private static instance: RealDataService;
   private toast: any;
   private openAIService?: OpenAIService;
-  private requestDelay = 1000; // Reduced to 1 second
+  private requestDelay = 1000;
   private lastRequestTime = 0;
 
   constructor(toast: any) {
@@ -54,6 +55,17 @@ export class RealDataService {
     return date.toISOString().split('T')[0].replace(/-/g, '');
   }
 
+  private isRecentEnough(dateString: string, maxHoursAgo: number): boolean {
+    try {
+      const itemDate = new Date(dateString);
+      const maxAgoDate = new Date();
+      maxAgoDate.setHours(maxAgoDate.getHours() - maxHoursAgo);
+      return itemDate > maxAgoDate;
+    } catch {
+      return false;
+    }
+  }
+
   initializeAI() {
     try {
       this.openAIService = OpenAIService.getInstance();
@@ -70,12 +82,12 @@ export class RealDataService {
   async fetchArXivPapers(): Promise<NewsItem[]> {
     try {
       await this.delayRequest();
-      console.log('📄 Fetching recent ArXiv papers (last 7 days)...');
+      console.log('📄 Fetching ArXiv papers (last 3 days only)...');
       
-      // ArXiv: últimos 7 días
-      const weekAgo = this.getRecentDateString(7);
+      // ArXiv: últimos 3 días únicamente
+      const threeDaysAgo = this.getRecentDateString(3);
       const response = await secureApiClient.secureRequest(
-        `https://export.arxiv.org/api/query?search_query=(cat:cs.AI OR cat:cs.LG OR cat:cs.CL) AND submittedDate:[${weekAgo} TO *]&start=0&max_results=15&sortBy=submittedDate&sortOrder=descending`,
+        `https://export.arxiv.org/api/query?search_query=(cat:cs.AI OR cat:cs.LG OR cat:cs.CL) AND submittedDate:[${threeDaysAgo} TO *]&start=0&max_results=10&sortBy=submittedDate&sortOrder=descending`,
         {
           method: 'GET',
           headers: {
@@ -90,18 +102,17 @@ export class RealDataService {
       const entries = xmlDoc.getElementsByTagName('entry');
       
       const papers: NewsItem[] = [];
-      for (let i = 0; i < Math.min(entries.length, 8); i++) {
+      for (let i = 0; i < Math.min(entries.length, 5); i++) {
         const entry = entries[i];
         const title = entry.getElementsByTagName('title')[0]?.textContent || '';
         const updated = entry.getElementsByTagName('updated')[0]?.textContent || '';
         const id = entry.getElementsByTagName('id')[0]?.textContent || '';
         
-        // Verificar que sea realmente reciente
-        const submittedDate = new Date(updated);
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        
-        if (submittedDate < sevenDaysAgo) continue;
+        // Verificación estricta de fecha reciente (últimos 3 días)
+        if (!this.isRecentEnough(updated, 72)) {
+          console.log(`⏰ Skipping old ArXiv paper: ${title} (${updated})`);
+          continue;
+        }
         
         const sanitized = sanitizeContent.newsItem({
           title,
@@ -111,7 +122,7 @@ export class RealDataService {
         papers.push({
           title: sanitized.title.replace(/\s+/g, ' ').trim(),
           source: sanitized.source,
-          time: this.getTimeAgo(submittedDate),
+          time: this.getTimeAgo(new Date(updated)),
           url: sanitizeContent.url(id),
           relevance: this.determineRelevance(sanitized.title),
           category: 'RESEARCH'
@@ -128,14 +139,14 @@ export class RealDataService {
   async fetchRedditMLPosts(): Promise<NewsItem[]> {
     try {
       await this.delayRequest();
-      console.log('🔴 Fetching recent Reddit posts (last 48 hours)...');
+      console.log('🔴 Fetching Reddit posts (last 24 hours only)...');
       
       const [mlResponse, singularityResponse] = await Promise.all([
-        secureApiClient.secureRequest('https://www.reddit.com/r/MachineLearning/new.json?limit=20&t=day', {
+        secureApiClient.secureRequest('https://www.reddit.com/r/MachineLearning/new.json?limit=15&t=day', {
           method: 'GET',
           headers: { 'User-Agent': 'AGI-Detector-Secure/1.0' }
         }),
-        secureApiClient.secureRequest('https://www.reddit.com/r/singularity/new.json?limit=15&t=day', {
+        secureApiClient.secureRequest('https://www.reddit.com/r/singularity/new.json?limit=10&t=day', {
           method: 'GET',
           headers: { 'User-Agent': 'AGI-Detector-Secure/1.0' }
         })
@@ -146,13 +157,13 @@ export class RealDataService {
         singularityResponse.json()
       ]);
       
-      // Filtrar por últimas 48 horas
-      const fortyEightHoursAgo = this.getRecentTimestamp(48);
+      // Filtrar por últimas 24 horas únicamente
+      const twentyFourHoursAgo = this.getRecentTimestamp(24);
       
       const posts: NewsItem[] = [
         ...mlData.data.children
-          .filter((post: any) => post.data.created_utc > fortyEightHoursAgo)
-          .slice(0, 5)
+          .filter((post: any) => post.data.created_utc > twentyFourHoursAgo)
+          .slice(0, 4)
           .map((post: any) => {
             const sanitized = sanitizeContent.newsItem({
               title: post.data.title,
@@ -168,8 +179,8 @@ export class RealDataService {
             };
           }),
         ...singularityData.data.children
-          .filter((post: any) => post.data.created_utc > fortyEightHoursAgo)
-          .slice(0, 3)
+          .filter((post: any) => post.data.created_utc > twentyFourHoursAgo)
+          .slice(0, 2)
           .map((post: any) => {
             const sanitized = sanitizeContent.newsItem({
               title: post.data.title,
@@ -186,7 +197,7 @@ export class RealDataService {
           })
       ];
       
-      console.log(`✅ Reddit: Found ${posts.length} recent posts`);
+      console.log(`✅ Reddit: Found ${posts.length} recent posts (last 24h)`);
       return posts;
     } catch (error) {
       console.error('❌ Error fetching Reddit posts:', error);
@@ -197,12 +208,12 @@ export class RealDataService {
   async fetchHackerNewsPosts(): Promise<NewsItem[]> {
     try {
       await this.delayRequest();
-      console.log('🟠 Fetching recent Hacker News posts (last 48 hours)...');
+      console.log('🟠 Fetching Hacker News posts (last 24 hours only)...');
       
-      // HN: últimas 48 horas usando timestamp correcto
-      const fortyEightHoursAgo = this.getRecentTimestamp(48);
+      // HN: últimas 24 horas únicamente
+      const twentyFourHoursAgo = this.getRecentTimestamp(24);
       const response = await secureApiClient.secureRequest(
-        `https://hn.algolia.com/api/v1/search?query=artificial+intelligence+OR+machine+learning+OR+AGI+OR+neural+OR+LLM&tags=story&hitsPerPage=25&numericFilters=created_at_i>${fortyEightHoursAgo}`,
+        `https://hn.algolia.com/api/v1/search?query=artificial+intelligence+OR+machine+learning+OR+AGI+OR+neural+OR+LLM&tags=story&hitsPerPage=20&numericFilters=created_at_i>${twentyFourHoursAgo}`,
         {
           method: 'GET',
           headers: {}
@@ -212,8 +223,14 @@ export class RealDataService {
       const data = await response.json();
       const stories: NewsItem[] = [];
       
-      for (const hit of data.hits.slice(0, 6)) {
+      for (const hit of data.hits.slice(0, 4)) {
         if (hit.title && this.isAIRelated(hit.title)) {
+          // Verificación adicional de fecha
+          if (hit.created_at_i <= twentyFourHoursAgo) {
+            console.log(`⏰ Skipping old HN story: ${hit.title}`);
+            continue;
+          }
+
           const sanitized = sanitizeContent.newsItem({
             title: hit.title,
             source: 'Hacker News'
@@ -230,7 +247,7 @@ export class RealDataService {
         }
       }
       
-      console.log(`✅ Hacker News: Found ${stories.length} recent stories`);
+      console.log(`✅ Hacker News: Found ${stories.length} recent stories (last 24h)`);
       return stories;
     } catch (error) {
       console.error('❌ Error fetching Hacker News:', error);
@@ -242,21 +259,18 @@ export class RealDataService {
     const priorityFeeds = [
       { url: 'https://openai.com/blog/rss/', source: 'OpenAI', category: 'INDUSTRY' },
       { url: 'https://research.fb.com/feed', source: 'Meta Research', category: 'RESEARCH' },
-      { url: 'https://blogs.microsoft.com/ai/feed/', source: 'Microsoft AI', category: 'INDUSTRY' },
-      { url: 'https://importai.substack.com/feed', source: 'Import AI', category: 'ANALYSIS' },
-      { url: 'https://garymarcus.substack.com/feed', source: 'Gary Marcus', category: 'ANALYSIS' },
-      { url: 'https://www.technologyreview.com/feed/', source: 'MIT Technology Review', category: 'TECH' }
+      { url: 'https://blogs.microsoft.com/ai/feed/', source: 'Microsoft AI', category: 'INDUSTRY' }
     ];
 
     const allFeedItems: NewsItem[] = [];
-    // Filtrar por últimas 72 horas para RSS feeds
-    const seventyTwoHoursAgo = new Date();
-    seventyTwoHoursAgo.setHours(seventyTwoHoursAgo.getHours() - 72);
+    // RSS feeds: últimas 48 horas únicamente
+    const fortyEightHoursAgo = new Date();
+    fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
 
     for (const feed of priorityFeeds) {
       try {
         await this.delayRequest();
-        console.log(`📡 Fetching recent RSS from ${feed.source} (last 72 hours)...`);
+        console.log(`📡 Fetching RSS from ${feed.source} (last 48 hours only)...`);
         
         const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(feed.url)}`;
         const response = await secureApiClient.secureRequest(proxyUrl, {
@@ -270,17 +284,17 @@ export class RealDataService {
           const xmlDoc = parser.parseFromString(data.contents, 'text/xml');
           const items = xmlDoc.querySelectorAll('item, entry');
           
-          for (let i = 0; i < Math.min(items.length, 3); i++) {
+          for (let i = 0; i < Math.min(items.length, 2); i++) {
             const item = items[i];
             const title = item.querySelector('title')?.textContent || '';
             const link = item.querySelector('link')?.getAttribute('href') || 
                         item.querySelector('link')?.textContent || '';
             const pubDate = item.querySelector('pubDate, published')?.textContent || '';
             
-            // Filtrar por fecha reciente
-            if (pubDate) {
-              const itemDate = new Date(pubDate);
-              if (itemDate < seventyTwoHoursAgo) continue;
+            // Filtro estricto de fecha (últimas 48 horas)
+            if (!pubDate || !this.isRecentEnough(pubDate, 48)) {
+              console.log(`⏰ Skipping old RSS item: ${title} (${pubDate})`);
+              continue;
             }
             
             if (title && this.isAIRelated(title)) {
@@ -292,32 +306,29 @@ export class RealDataService {
               allFeedItems.push({
                 title: sanitized.title.replace(/\s+/g, ' ').trim(),
                 source: sanitized.source,
-                time: pubDate ? this.getTimeAgo(new Date(pubDate)) : 'Recent',
+                time: this.getTimeAgo(new Date(pubDate)),
                 url: sanitizeContent.url(link),
                 relevance: this.determineRelevance(sanitized.title),
                 category: feed.category
               });
             }
           }
-          console.log(`✅ ${feed.source}: Found recent content`);
         }
       } catch (error) {
         console.error(`❌ Error fetching RSS feed from ${feed.source}:`, error);
       }
     }
 
-    console.log(`✅ RSS Total: Found ${allFeedItems.length} recent items`);
-    return allFeedItems.slice(0, 10);
+    console.log(`✅ RSS Total: Found ${allFeedItems.length} recent items (last 48h)`);
+    return allFeedItems;
   }
 
   private isAIRelated(title: string): boolean {
     const aiKeywords = [
       'ai', 'artificial intelligence', 'machine learning', 'deep learning',
       'neural network', 'gpt', 'llm', 'chatgpt', 'openai', 'anthropic',
-      'deepmind', 'transformer', 'agi', 'automation', 'robot', 'claude',
-      'gemini', 'reasoning', 'autonomous', 'consciousness', 'sentient',
-      'benchmark', 'evaluation', 'chatbot', 'language model', 'ai safety',
-      'alignment', 'superintelligence', 'capabilities', 'emergence'
+      'deepmind', 'transformer', 'automation', 'robot', 'claude',
+      'gemini', 'reasoning', 'autonomous', 'chatbot', 'language model'
     ];
     
     return aiKeywords.some(keyword => 
@@ -326,28 +337,35 @@ export class RealDataService {
   }
 
   private determineRelevance(title: string): 'critical' | 'high' | 'medium' | 'low' {
+    // Criterios MÁS ESTRICTOS para evitar falsos positivos
     const criticalKeywords = [
-      'agi', 'artificial general intelligence', 'consciousness', 'sentient', 
-      'breakthrough', 'superintelligence', 'human-level', 'passes turing test',
-      'self-improving', 'recursive improvement', 'intelligence explosion'
+      'agi achieved', 'artificial general intelligence breakthrough', 
+      'human-level ai', 'passes turing test completely',
+      'ai consciousness confirmed', 'sentient ai verified',
+      'superintelligence emergence'
     ];
+    
     const highKeywords = [
-      'gpt-5', 'gpt-4', 'claude', 'gemini', 'reasoning', 'autonomous',
-      'benchmark', 'milestone', 'evaluation', 'capabilities', 'frontier',
-      'multimodal', 'robotics', 'embodied', 'planning', 'tool use'
+      'gpt-5', 'gpt-4', 'claude-4', 'major breakthrough', 'reasoning breakthrough',
+      'autonomous agents', 'multimodal breakthrough', 'robotics breakthrough',
+      'planning capabilities', 'tool use mastery'
     ];
     
     const titleLower = title.toLowerCase();
     
+    // Búsqueda exacta para critical (evitar falsos positivos)
     if (criticalKeywords.some(keyword => titleLower.includes(keyword))) {
       return 'critical';
     }
+    
     if (highKeywords.some(keyword => titleLower.includes(keyword))) {
       return 'high';
     }
+    
     if (this.isAIRelated(title)) {
       return 'medium';
     }
+    
     return 'low';
   }
 
@@ -373,10 +391,10 @@ export class RealDataService {
   }> {
     this.toast({
       title: "🧠 AI-Powered Analysis",
-      description: "Scanning recent news with improved date filters...",
+      description: "Scanning only recent news (24-72 hours)...",
     });
 
-    console.log('🔍 Starting comprehensive AGI scan with recent content only...');
+    console.log('🔍 Starting strict AGI scan with recent content only...');
 
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
@@ -417,6 +435,7 @@ export class RealDataService {
         };
       });
 
+      // Ordenar por relevancia y probabilidad AGI
       newsWithAnalysis.sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         const aRelevance = relevanceOrder[a.relevance];
@@ -437,7 +456,7 @@ export class RealDataService {
         detected: batchAnalysis.overallAgiDetection.detected,
         confidence: batchAnalysis.overallAgiDetection.confidence,
         reasoning: batchAnalysis.overallAgiDetection.reasoning,
-        sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Meta Research', 'Microsoft AI', 'Import AI', 'Gary Marcus', 'MIT Tech Review'],
+        sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Meta Research', 'Microsoft AI'],
         newsWithAnalysis
       };
 
@@ -454,19 +473,21 @@ export class RealDataService {
     reasoning: string;
     newsWithAnalysis: NewsItem[];
   } {
+    // Criterios MÁS ESTRICTOS para evitar falsos positivos
     const criticalNews = allNews.filter(item => item.relevance === 'critical');
-    const agiKeywords = ['agi', 'artificial general intelligence', 'consciousness', 'sentient'];
-    const hasAGIIndicators = allNews.some(item => 
-      agiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
+    const strictAgiKeywords = ['agi achieved', 'artificial general intelligence breakthrough', 'human-level ai', 'ai consciousness confirmed'];
+    const hasStrictAGIIndicators = allNews.some(item => 
+      strictAgiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
     );
 
-    const confidence = Math.min(95, criticalNews.length * 15 + (hasAGIIndicators ? 30 : 0));
+    // Reducir sensibilidad para evitar falsos positivos
+    const confidence = Math.min(95, criticalNews.length * 25 + (hasStrictAGIIndicators ? 50 : 0));
     
     return {
-      detected: confidence > 80,
+      detected: confidence > 90 && hasStrictAGIIndicators, // Umbral más alto
       confidence,
-      reasoning: `Found ${criticalNews.length} critical recent items with ${hasAGIIndicators ? 'AGI' : 'no AGI'} indicators from recent sources`,
-      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Meta Research', 'Microsoft AI', 'Import AI', 'Gary Marcus', 'MIT Tech Review'],
+      reasoning: `Found ${criticalNews.length} critical recent items with ${hasStrictAGIIndicators ? 'strict AGI' : 'no AGI'} indicators from recent sources (24-72h)`,
+      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Meta Research', 'Microsoft AI'],
       newsWithAnalysis: allNews.sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
