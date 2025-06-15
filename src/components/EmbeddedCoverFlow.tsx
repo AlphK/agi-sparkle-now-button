@@ -403,7 +403,7 @@ const EmbeddedCoverFlow = () => {
                   data-card-index={index}
                   className={`coverflow-card ${isActive ? 'active' : ''}`}
                   style={cardStyle}
-                  onClick={() => setActiveIndex(index)}
+                  onClick={isActive ? undefined : () => setActiveIndex(index)}
                 >
                   <div className="h-full p-4 flex flex-col relative overflow-hidden">
                     <div className="card-header mb-4 relative z-10">
