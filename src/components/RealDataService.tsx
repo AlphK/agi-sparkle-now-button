@@ -20,11 +20,32 @@ interface AIInsights {
   agiProbability: number;
 }
 
+// Fuentes expandidas según la lista del usuario
+const EXPANDED_SOURCES = {
+  frontier: [
+    { url: 'https://openai.com/blog/rss/', source: 'OpenAI', category: 'FRONTIER' },
+    { url: 'https://ai.googleblog.com/feeds/posts/default', source: 'Google DeepMind', category: 'FRONTIER' },
+    { url: 'https://research.fb.com/feed', source: 'Meta AI', category: 'FRONTIER' },
+    { url: 'https://blogs.microsoft.com/ai/feed/', source: 'Microsoft AI', category: 'FRONTIER' },
+    { url: 'https://blogs.nvidia.com/blog/category/ai/feed/', source: 'NVIDIA AI', category: 'FRONTIER' },
+  ],
+  analysis: [
+    { url: 'https://importai.substack.com/feed', source: 'Import AI', category: 'ANALYSIS' },
+    { url: 'https://garymarcus.substack.com/feed', source: 'Gary Marcus', category: 'ANALYSIS' },
+    { url: 'https://medium.com/feed/@karpathy', source: 'Andrej Karpathy', category: 'ANALYSIS' },
+    { url: 'https://thegradient.pub/feed/', source: 'The Gradient', category: 'ANALYSIS' },
+  ],
+  community: [
+    { url: 'https://towardsdatascience.com/feed', source: 'Towards Data Science', category: 'COMMUNITY' },
+    { url: 'https://www.technologyreview.com/feed/', source: 'MIT Technology Review', category: 'TECH' },
+  ]
+};
+
 export class RealDataService {
   private static instance: RealDataService;
   private toast: any;
   private openAIService?: OpenAIService;
-  private requestDelay = 1000;
+  private requestDelay = 2000;
   private lastRequestTime = 0;
 
   constructor(toast: any) {
@@ -213,15 +234,11 @@ export class RealDataService {
     }
   }
 
-  async fetchRSSFeeds(): Promise<NewsItem[]> {
+  async fetchExpandedRSSFeeds(): Promise<NewsItem[]> {
     const priorityFeeds = [
-      { url: 'https://openai.com/blog/rss/', source: 'OpenAI', category: 'INDUSTRY' },
-      { url: 'https://ai.googleblog.com/feeds/posts/default', source: 'Google DeepMind', category: 'RESEARCH' },
-      { url: 'https://blogs.microsoft.com/ai/feed/', source: 'Microsoft AI', category: 'INDUSTRY' },
-      { url: 'https://importai.substack.com/feed', source: 'Import AI', category: 'ANALYSIS' },
-      { url: 'https://garymarcus.substack.com/feed', source: 'Gary Marcus', category: 'ANALYSIS' },
-      { url: 'https://towardsdatascience.com/feed', source: 'Towards Data Science', category: 'COMMUNITY' },
-      { url: 'https://www.technologyreview.com/feed/', source: 'MIT Technology Review', category: 'TECH' }
+      ...EXPANDED_SOURCES.frontier,
+      ...EXPANDED_SOURCES.analysis,
+      ...EXPANDED_SOURCES.community
     ];
 
     const allFeedItems: NewsItem[] = [];
@@ -275,6 +292,12 @@ export class RealDataService {
 
     console.log(`✅ RSS Total: Found ${allFeedItems.length} items`);
     return allFeedItems.slice(0, 8);
+  }
+
+  private isRecentDate(date: Date, maxDaysAgo: number): boolean {
+    const now = new Date();
+    const diffInDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+    return diffInDays <= maxDaysAgo;
   }
 
   private isAIRelated(title: string): boolean {
@@ -357,7 +380,7 @@ export class RealDataService {
       this.fetchArXivPapers(),
       this.fetchRedditMLPosts(), 
       this.fetchHackerNewsPosts(),
-      this.fetchRSSFeeds()
+      this.fetchExpandedRSSFeeds()
     ]);
 
     const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]

@@ -100,7 +100,6 @@ const EmbeddedCoverFlow = () => {
       [index]: { isLoaded: false, hasError: false, content: 'loading' }
     }));
 
-    // Simular carga exitosa
     try {
       await new Promise<void>((resolve) => {
         setTimeout(() => {
@@ -168,6 +167,7 @@ const EmbeddedCoverFlow = () => {
     if (state.content === 'iframe') {
       return (
         <iframe
+          key={`iframe-${index}-${Date.now()}`}
           src={source.url}
           style={{ 
             width: '100%', 
@@ -247,7 +247,11 @@ const EmbeddedCoverFlow = () => {
           position: relative;
         }
 
-        .card-iframe-container iframe {
+        .coverflow-card.active .card-iframe-container {
+          overflow: auto;
+        }
+
+        .coverflow-card.active .card-iframe-container iframe {
           pointer-events: auto;
         }
 
@@ -296,7 +300,7 @@ const EmbeddedCoverFlow = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.open(source.url, '_blank');
+                              window.open(source.url, '_blank', 'noopener,noreferrer');
                             }}
                             className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
                             title="Open in new tab"
