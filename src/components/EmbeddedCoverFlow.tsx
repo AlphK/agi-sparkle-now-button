@@ -22,7 +22,7 @@ const NEWS_SOURCES: NewsSource[] = [
   },
   {
     title: "Hacker News AI",
-    url: "https://hn.algolia.com/?q=artificial+intelligence",
+    url: "https://hn.algolia.com/?q=artificial+intelligence&sort=byDate&type=story",
     category: "Tech"
   },
   {
@@ -173,7 +173,8 @@ const EmbeddedCoverFlow = () => {
             width: '100%', 
             height: '100%', 
             border: 'none', 
-            borderRadius: '12px'
+            borderRadius: '12px',
+            pointerEvents: isActive ? 'auto' : 'none'
           }}
           sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
           referrerPolicy="no-referrer"
@@ -249,14 +250,6 @@ const EmbeddedCoverFlow = () => {
 
         .coverflow-card.active .card-iframe-container {
           overflow: auto;
-        }
-
-        .coverflow-card.active .card-iframe-container iframe {
-          pointer-events: auto;
-        }
-
-        .coverflow-card:not(.active) .card-iframe-container iframe {
-          pointer-events: none;
         }
       `}</style>
 
