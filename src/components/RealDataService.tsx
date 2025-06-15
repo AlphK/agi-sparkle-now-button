@@ -10,18 +10,21 @@ interface NewsItem {
   url: string;
   relevance: 'critical' | 'high' | 'medium' | 'low';
   category: string;
-  aiAnalysis?: {
-    reasoning: string;
-    keyInsights: string[];
-    agiProbability: number;
-  };
+}
+
+interface AIInsights {
+  summary: string;
+  keyTrends: string[];
+  riskAssessment: string;
+  recommendations: string[];
+  agiProbability: number;
 }
 
 export class RealDataService {
   private static instance: RealDataService;
   private toast: any;
   private openAIService?: OpenAIService;
-  private requestDelay = 1000; // 1 second delay between requests
+  private requestDelay = 1000;
   private lastRequestTime = 0;
 
   constructor(toast: any) {
@@ -173,7 +176,6 @@ export class RealDataService {
       await this.delayRequest();
       console.log('🟠 Fetching Hacker News posts...');
       
-      // Use algolia search instead of top stories to avoid rate limits
       const response = await secureApiClient.secureRequest(
         'https://hn.algolia.com/api/v1/search?query=artificial+intelligence+OR+machine+learning+OR+AGI&tags=story&hitsPerPage=8',
         {
@@ -335,8 +337,9 @@ export class RealDataService {
     sources: string[];
     reasoning: string;
     newsWithAnalysis: NewsItem[];
+    aiInsights?: AIInsights;
   }> {
-    console.log('🔍 INICIANDO BÚSQUEDA INTELIGENTE CON IA...');
+    console.log('🔍 INICIANDO BÚSQUEDA NORMAL CON REPORTE IA...');
     
     // Inicializar OpenAI si no está disponible
     if (!this.openAIService) {
@@ -345,10 +348,11 @@ export class RealDataService {
     }
 
     this.toast({
-      title: "🧠 Análisis IA Activo",
-      description: "Usando OpenAI para análisis inteligente...",
+      title: "🔍 Búsqueda + 🧠 Análisis IA",
+      description: "Recolectando noticias y generando reporte inteligente...",
     });
 
+    // Hacer búsqueda normal de noticias
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
       this.fetchRedditMLPosts(), 
@@ -356,101 +360,80 @@ export class RealDataService {
       this.fetchRSSFeeds()
     ]);
 
-    const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
-    console.log(`📊 Total items recolectados: ${allNews.length}`);
-
-    // Verificar que OpenAI esté disponible
-    if (!this.openAIService) {
-      console.log('❌ OpenAI no disponible, usando análisis básico');
-      return this.performBasicAGIScan(allNews);
-    }
-
-    try {
-      console.log('🤖 Enviando noticias a OpenAI para análisis...');
-      
-      const analysisInput = allNews.slice(0, 15).map(item => ({
-        title: item.title,
-        source: item.source
-      }));
-
-      const batchAnalysis = await this.openAIService.batchAnalyzeNews(analysisInput);
-      console.log('✅ Análisis OpenAI completado:', batchAnalysis);
-
-      const newsWithAnalysis = allNews.map((item, index) => {
-        const analysis = batchAnalysis.items[index]?.analysis;
-        return {
-          ...item,
-          relevance: analysis?.relevance || item.relevance,
-          aiAnalysis: analysis ? {
-            reasoning: analysis.reasoning,
-            keyInsights: analysis.keyInsights,
-            agiProbability: analysis.agiProbability
-          } : undefined
-        };
-      });
-
-      // Ordenar por relevancia IA
-      newsWithAnalysis.sort((a, b) => {
-        const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
-        const aRelevance = relevanceOrder[a.relevance];
-        const bRelevance = relevanceOrder[b.relevance];
-        
-        if (aRelevance !== bRelevance) {
-          return aRelevance - bRelevance;
-        }
-        
-        const aProb = a.aiAnalysis?.agiProbability || 0;
-        const bProb = b.aiAnalysis?.agiProbability || 0;
-        return bProb - aProb;
-      });
-
-      console.log(`✅ ANÁLISIS IA COMPLETADO. Detección: ${batchAnalysis.overallAgiDetection.detected}, Confianza: ${batchAnalysis.overallAgiDetection.confidence}%`);
-
-      return {
-        detected: batchAnalysis.overallAgiDetection.detected,
-        confidence: batchAnalysis.overallAgiDetection.confidence,
-        reasoning: `[IA] ${batchAnalysis.overallAgiDetection.reasoning}`,
-        sources: ['OpenAI Analysis', 'ArXiv', 'Reddit', 'Hacker News', 'OpenAI Blog', 'Google DeepMind', 'MIT Tech Review'],
-        newsWithAnalysis
-      };
-
-    } catch (error) {
-      console.error('❌ OpenAI analysis failed, usando análisis básico:', error);
-      this.toast({
-        title: "⚠️ IA Analysis Failed",
-        description: "Usando análisis básico como respaldo",
-        variant: "destructive",
-      });
-      return this.performBasicAGIScan(allNews);
-    }
-  }
-
-  private performBasicAGIScan(allNews: NewsItem[]): { 
-    detected: boolean; 
-    confidence: number; 
-    sources: string[];
-    reasoning: string;
-    newsWithAnalysis: NewsItem[];
-  } {
-    console.log('🔍 EJECUTANDO ANÁLISIS BÁSICO (SIN IA)...');
-    
-    const criticalNews = allNews.filter(item => item.relevance === 'critical');
-    const agiKeywords = ['agi', 'artificial general intelligence', 'consciousness', 'sentient'];
-    const hasAGIIndicators = allNews.some(item => 
-      agiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
-    );
-
-    const confidence = Math.min(95, criticalNews.length * 15 + (hasAGIIndicators ? 30 : 0));
-    
-    return {
-      detected: confidence > 80,
-      confidence,
-      reasoning: `[BÁSICO] Found ${criticalNews.length} critical items con ${hasAGIIndicators ? 'AGI' : 'no AGI'} indicators`,
-      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI Blog', 'Google DeepMind'],
-      newsWithAnalysis: allNews.sort((a, b) => {
+    const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds]
+      .sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
-      })
+      });
+
+    console.log(`📊 Total items recolectados: ${allNews.length}`);
+
+    // Análisis básico
+    const criticalNews = allNews.filter(item => item.relevance === 'critical');
+    const detected = criticalNews.length > 0;
+    const confidence = Math.min(95, criticalNews.length * 20 + allNews.filter(n => n.relevance === 'high').length * 10);
+
+    let aiInsights: AIInsights | undefined;
+
+    // Generar reporte IA si está disponible
+    if (this.openAIService && allNews.length > 0) {
+      try {
+        console.log('🧠 Generando reporte IA...');
+        
+        const newsForAnalysis = allNews.slice(0, 10).map(item => `${item.title} (${item.source})`).join('\n');
+        
+        const prompt = `Analiza estas noticias de IA y genera un reporte ejecutivo:
+
+${newsForAnalysis}
+
+Responde con JSON:
+{
+  "summary": "Resumen ejecutivo de 2-3 líneas",
+  "keyTrends": ["tendencia1", "tendencia2", "tendencia3"],
+  "riskAssessment": "Evaluación de riesgo de AGI en 1-2 líneas",
+  "recommendations": ["recomendación1", "recomendación2"],
+  "agiProbability": número entre 0-100
+}`;
+
+        const response = await fetch('https://prubeandoal--9915a12a4a0d11f0aa8a76b3cceeab13.web.val.run/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'X-Auth-Token': '0204',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+            max_tokens: 500
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          
+          if (content) {
+            try {
+              aiInsights = JSON.parse(content);
+              console.log('✅ Reporte IA generado exitosamente');
+            } catch (parseError) {
+              console.error('❌ Error parsing AI insights:', parseError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error generando reporte IA:', error);
+      }
+    }
+
+    return {
+      detected,
+      confidence,
+      reasoning: `Encontradas ${criticalNews.length} noticias críticas de ${allNews.length} fuentes`,
+      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Google DeepMind', 'Microsoft AI'],
+      newsWithAnalysis: allNews,
+      aiInsights
     };
   }
 

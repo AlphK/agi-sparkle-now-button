@@ -100,18 +100,12 @@ const EmbeddedCoverFlow = () => {
       [index]: { isLoaded: false, hasError: false, content: 'loading' }
     }));
 
-    // Intentar cargar iframe directamente
+    // Simular carga exitosa
     try {
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Timeout loading content'));
-        }, 5000);
-
-        // Simular carga exitosa para sitios conocidos
+      await new Promise<void>((resolve) => {
         setTimeout(() => {
-          clearTimeout(timeout);
           resolve();
-        }, 2000);
+        }, 1500);
       });
 
       console.log(`✅ Contenido cargado para ${source.title}`);
@@ -151,13 +145,14 @@ const EmbeddedCoverFlow = () => {
       if (!contentStates[index]) {
         setTimeout(() => {
           loadContent(index);
-        }, i * 500);
+        }, i * 300);
       }
     });
   }, [activeIndex]);
 
   const renderContent = (source: NewsSource, index: number) => {
     const state = contentStates[index];
+    const isActive = index === activeIndex;
     
     if (!state || state.content === 'loading') {
       return (
@@ -179,11 +174,12 @@ const EmbeddedCoverFlow = () => {
             height: '100%', 
             border: 'none', 
             borderRadius: '12px',
-            pointerEvents: 'auto'
+            pointerEvents: isActive ? 'auto' : 'none'
           }}
           sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
           referrerPolicy="no-referrer"
           title={`Content from ${source.title}`}
+          scrolling="yes"
         />
       );
     }
@@ -236,41 +232,25 @@ const EmbeddedCoverFlow = () => {
         .coverflow-card.active {
           border-color: #3b82f6;
           box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25);
+          cursor: default;
+        }
+
+        .coverflow-card:not(.active) {
+          cursor: pointer;
         }
 
         .card-iframe-container {
           width: 100%;
           height: 100%;
-          overflow: hidden;
+          overflow: auto;
           background: white;
           border-radius: 12px;
           position: relative;
-          pointer-events: auto;
-        }
-
-        .coverflow-card:not(.active) .card-iframe-container {
-          pointer-events: none;
         }
 
         .coverflow-card.active .card-iframe-container {
-          pointer-events: auto;
+          overflow: auto;
         }
-
-        .card-dots {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 12px;
-        }
-
-        .card-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-        }
-
-        .card-dot.red { background-color: #ef4444; }
-        .card-dot.yellow { background-color: #eab308; }
-        .card-dot.green { background-color: #22c55e; }
       `}</style>
 
       <div className="flex items-center justify-center" style={{ perspective: '1200px' }}>
@@ -287,12 +267,12 @@ const EmbeddedCoverFlow = () => {
                   style={cardStyle}
                   onClick={() => !isActive && setActiveIndex(index)}
                 >
-                  <div className="h-full p-4 flex flex-col relative overflow-hidden">
-                    <div className="card-header mb-4 relative z-20 bg-white">
-                      <div className="card-dots">
-                        <span className="card-dot red"></span>
-                        <span className="card-dot yellow"></span>
-                        <span className="card-dot green"></span>
+                  <div className="h-full p-4 flex flex-col relative">
+                    <div className="card-header mb-4 relative z-20 bg-white/95 backdrop-blur rounded-lg p-3">
+                      <div className="flex gap-2 mb-2">
+                        <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                        <span className="w-3 h-3 bg-yellow-500 rounded-full"></span>
+                        <span className="w-3 h-3 bg-green-500 rounded-full"></span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
