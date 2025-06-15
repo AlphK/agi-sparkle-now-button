@@ -90,13 +90,13 @@ const EmbeddedCoverFlow = () => {
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
       const target = event.target as Element;
-      const carouselElement = document.querySelector('.coverflow-container');
+      const carouselSection = document.getElementById('carousel-section');
       
-      if (carouselElement && carouselElement.contains(target)) {
-        const activeCard = document.querySelector('.coverflow-card.active .card-iframe-container');
-        const isScrollingInActiveCard = activeCard && activeCard.contains(target);
+      if (carouselSection && carouselSection.contains(target)) {
+        // Solo prevenir scroll si no estamos dentro de un iframe
+        const isInsideIframe = target.closest('iframe') || target.closest('.card-iframe-container');
         
-        if (!isScrollingInActiveCard) {
+        if (!isInsideIframe) {
           event.preventDefault();
           if (event.deltaY > 0) {
             nextSlide();
@@ -115,17 +115,18 @@ const EmbeddedCoverFlow = () => {
       }
     };
 
-    window.addEventListener('wheel', handleWheel, { passive: false });
-    window.addEventListener('keydown', handleKeyDown);
+    // Usar passive: false solo cuando sea necesario
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    document.addEventListener('keydown', handleKeyDown);
     
     return () => {
-      window.removeEventListener('wheel', handleWheel);
-      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('wheel', handleWheel);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-white p-8 relative overflow-hidden coverflow-container">
+    <section id="carousel-section" className="min-h-screen bg-white p-8 relative overflow-hidden">
       <style>{`
         .coverflow-card {
           position: absolute;
@@ -138,6 +139,7 @@ const EmbeddedCoverFlow = () => {
           border-radius: 16px;
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
           transform-style: preserve-3d;
+          pointer-events: auto;
         }
 
         .coverflow-card:hover {
@@ -152,10 +154,10 @@ const EmbeddedCoverFlow = () => {
         .card-iframe-container {
           width: 100%;
           height: 100%;
-          overflow: auto;
-          -webkit-overflow-scrolling: touch;
+          overflow: hidden;
           background: white;
           border-radius: 12px;
+          position: relative;
         }
 
         .card-iframe-container iframe {
@@ -164,6 +166,16 @@ const EmbeddedCoverFlow = () => {
           border: none;
           background: white;
           border-radius: 12px;
+          pointer-events: auto;
+        }
+
+        /* Mejorar la interacción con iframes */
+        .coverflow-card:not(.active) .card-iframe-container {
+          pointer-events: none;
+        }
+
+        .coverflow-card.active .card-iframe-container {
+          pointer-events: auto;
         }
 
         .card-dots {
@@ -181,100 +193,107 @@ const EmbeddedCoverFlow = () => {
         .card-dot.red { background-color: #ef4444; }
         .card-dot.yellow { background-color: #eab308; }
         .card-dot.green { background-color: #22c55e; }
+
+        /* Evitar interferencia con scroll global */
+        #carousel-section {
+          touch-action: pan-y;
+        }
       `}</style>
 
-      <div className="w-full max-w-6xl relative" style={{ perspective: '1200px' }}>
-        <div className="relative h-96 flex items-center justify-center" style={{ height: '800px' }}>
-          {VERIFIED_NEWS_SOURCES.map((source, index) => {
-            const cardStyle = getCardTransform(index);
-            const isActive = index === activeIndex;
-            
-            return (
-              <article
-                key={index}
-                className={`coverflow-card ${isActive ? 'active' : ''}`}
-                style={cardStyle}
-                onClick={() => setActiveIndex(index)}
-              >
-                <div className="h-full p-4 flex flex-col relative overflow-hidden">
-                  <div className="card-header mb-4 relative z-10">
-                    <div className="card-dots">
-                      <span className="card-dot red"></span>
-                      <span className="card-dot yellow"></span>
-                      <span className="card-dot green"></span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-lg font-bold text-gray-800 truncate">{source.title}</div>
-                        <div className="text-sm text-gray-600">{source.category}</div>
+      <div className="flex items-center justify-center" style={{ perspective: '1200px' }}>
+        <div className="w-full max-w-6xl relative">
+          <div className="relative flex items-center justify-center" style={{ height: '800px' }}>
+            {VERIFIED_NEWS_SOURCES.map((source, index) => {
+              const cardStyle = getCardTransform(index);
+              const isActive = index === activeIndex;
+              
+              return (
+                <article
+                  key={index}
+                  className={`coverflow-card ${isActive ? 'active' : ''}`}
+                  style={cardStyle}
+                  onClick={() => setActiveIndex(index)}
+                >
+                  <div className="h-full p-4 flex flex-col relative overflow-hidden">
+                    <div className="card-header mb-4 relative z-10">
+                      <div className="card-dots">
+                        <span className="card-dot red"></span>
+                        <span className="card-dot yellow"></span>
+                        <span className="card-dot green"></span>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(source.url, '_blank');
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-lg font-bold text-gray-800 truncate">{source.title}</div>
+                          <div className="text-sm text-gray-600">{source.category}</div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(source.url, '_blank');
+                          }}
+                          className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          title="Abrir en nueva pestaña"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 card-iframe-container relative z-10">
+                      {!loadedSources.has(index) && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
+                          <div className="text-gray-500">Cargando {source.title}...</div>
+                        </div>
+                      )}
+                      <iframe
+                        src={source.url}
+                        loading="lazy"
+                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        onLoad={() => handleIframeLoad(index)}
+                        onError={(e) => handleIframeError(index, e)}
+                        style={{ 
+                          display: 'block',
+                          visibility: loadedSources.has(index) ? 'visible' : 'hidden'
                         }}
-                        className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                        title="Abrir en nueva pestaña"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
+                      />
                     </div>
                   </div>
+                </article>
+              );
+            })}
+          </div>
 
-                  <div className="flex-1 card-iframe-container relative z-10">
-                    {!loadedSources.has(index) && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-20">
-                        <div className="text-gray-500">Cargando {source.title}...</div>
-                      </div>
-                    )}
-                    <iframe
-                      src={source.url}
-                      loading="lazy"
-                      sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                      referrerPolicy="no-referrer-when-downgrade"
-                      onLoad={() => handleIframeLoad(index)}
-                      onError={(e) => handleIframeError(index, e)}
-                      style={{ 
-                        display: 'block',
-                        visibility: loadedSources.has(index) ? 'visible' : 'hidden'
-                      }}
-                    />
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+          <div className="flex justify-center mt-8 space-x-2">
+            {VERIFIED_NEWS_SOURCES.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setActiveIndex(index)}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  index === activeIndex 
+                    ? 'bg-blue-500 scale-125' 
+                    : 'bg-gray-300 hover:bg-gray-400'
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={prevSlide}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-20"
+          >
+            <ChevronLeft className="w-6 h-6 text-gray-700" />
+          </button>
+          
+          <button
+            onClick={nextSlide}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-20"
+          >
+            <ChevronRight className="w-6 h-6 text-gray-700" />
+          </button>
         </div>
-
-        <div className="flex justify-center mt-8 space-x-2">
-          {VERIFIED_NEWS_SOURCES.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => setActiveIndex(index)}
-              className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                index === activeIndex 
-                  ? 'bg-blue-500 scale-125' 
-                  : 'bg-gray-300 hover:bg-gray-400'
-              }`}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={prevSlide}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110"
-        >
-          <ChevronLeft className="w-6 h-6 text-gray-700" />
-        </button>
-        
-        <button
-          onClick={nextSlide}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110"
-        >
-          <ChevronRight className="w-6 h-6 text-gray-700" />
-        </button>
       </div>
-    </div>
+    </section>
   );
 };
 
