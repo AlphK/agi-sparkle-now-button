@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Brain, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -31,20 +31,41 @@ const Index = () => {
   const [agiDetected, setAgiDetected] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [useAI, setUseAI] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
   const { toast } = useToast();
+
+  // Timer para mostrar el prompt después de 30 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isScanning && !hasScanned) {
+        setShowPrompt(true);
+      }
+    }, 30000);
+
+    return () => clearTimeout(timer);
+  }, [isScanning, hasScanned]);
+
+  // Ocultar prompt cuando se inicia el scan
+  useEffect(() => {
+    if (isScanning) {
+      setShowPrompt(false);
+    }
+  }, [isScanning]);
 
   const handleScan = async () => {
     setIsScanning(true);
     setNewsData([]);
     setHasScanned(false);
     setAgiDetected(false);
+    setShowPrompt(false);
     
     try {
+      console.log('🔍 Iniciando búsqueda AGI...');
       const dataService = RealDataService.getInstance(toast);
       
       let scanResult;
       if (useAI) {
-        console.log('Iniciando búsqueda inteligente de AGI...');
+        console.log('🧠 Usando IA para búsqueda inteligente...');
         scanResult = await dataService.performIntelligentAGIScan();
         setNewsData(scanResult.newsWithAnalysis);
         
@@ -53,12 +74,11 @@ const Index = () => {
           description: `${scanResult.reasoning}`,
         });
 
-        // Verificar si se detectó AGI
         if (scanResult.detected) {
           setTimeout(() => setAgiDetected(true), 1000);
         }
       } else {
-        console.log('Iniciando búsqueda básica...');
+        console.log('🔍 Búsqueda básica con análisis de keywords...');
         const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
           dataService.fetchArXivPapers(),
           dataService.fetchRedditMLPosts(),
@@ -74,25 +94,34 @@ const Index = () => {
         
         setNewsData(allNews);
         
-        // Análisis básico de AGI
+        // Análisis básico de AGI con keywords
         const criticalItems = allNews.filter(item => item.relevance === 'critical');
-        const agiKeywords = ['agi', 'artificial general intelligence', 'superintelligence', 'consciousness'];
+        const agiKeywords = [
+          'agi', 'artificial general intelligence', 'superintelligence', 
+          'consciousness', 'sentient', 'self-aware', 'breakthrough'
+        ];
+        
         const hasAgiSigns = criticalItems.some(item => 
-          agiKeywords.some(keyword => item.title.toLowerCase().includes(keyword))
+          agiKeywords.some(keyword => 
+            item.title.toLowerCase().includes(keyword) ||
+            item.category.toLowerCase().includes(keyword)
+          )
         );
         
+        console.log('🎯 Análisis básico:', { hasAgiSigns, criticalItems: criticalItems.length });
         scanResult = { detected: hasAgiSigns, confidence: hasAgiSigns ? 75 : 0 };
       }
 
       if (testMode) {
+        console.log('🧪 Modo test activado - simulando detección AGI');
         setTimeout(() => setAgiDetected(true), 1000);
       }
       
-      console.log('Búsqueda completada:', scanResult, newsData.length);
+      console.log('✅ Búsqueda completada:', scanResult, 'Items encontrados:', newsData.length);
       setHasScanned(true);
       
     } catch (error) {
-      console.error('Error en la búsqueda:', error);
+      console.error('❌ Error en la búsqueda AGI:', error);
       toast({
         title: "❌ Error",
         description: "Error al conectar con las fuentes. Intenta de nuevo.",
@@ -106,20 +135,16 @@ const Index = () => {
   const getButtonContent = () => {
     if (isScanning) {
       return (
-        <div className="flex flex-col items-center space-y-3">
-          <div className="text-center">
-            <span className="text-xl font-bold text-white">
-              ANALIZANDO
-            </span>
-            <div className="flex justify-center space-x-1 mt-2">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 bg-white rounded-full animate-bounce"
-                  style={{ animationDelay: `${i * 0.2}s` }}
-                ></div>
-              ))}
-            </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-xl font-bold text-white">SCANNING</span>
+          <div className="flex space-x-1">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="w-2 h-2 bg-white rounded-full animate-bounce"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              ></div>
+            ))}
           </div>
         </div>
       );
@@ -135,7 +160,7 @@ const Index = () => {
       />
 
       {/* Sección principal del escáner */}
-      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+      <div className="flex flex-col items-center justify-center min-h-screen px-4 relative">
         {useAI && (
           <div className="absolute top-16 left-4 right-4 max-w-md mx-auto">
             <SecurityAlert
@@ -162,13 +187,34 @@ const Index = () => {
           </div>
         </div>
 
-        <Button
+        {/* Prompt de inactividad */}
+        {showPrompt && (
+          <div className="absolute top-32 animate-bounce">
+            <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg">
+              <span className="text-sm font-medium">👆 Push the button!</span>
+            </div>
+          </div>
+        )}
+
+        {/* Botón 3D mejorado */}
+        <button
           onClick={handleScan}
           disabled={isScanning}
-          className="w-48 h-48 rounded-full bg-red-500 hover:bg-red-600 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70"
+          className="relative w-48 h-48 rounded-full bg-gradient-to-b from-red-400 via-red-500 to-red-600 hover:from-red-500 hover:via-red-600 hover:to-red-700 text-white border-none shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-70 transform-gpu"
+          style={{
+            boxShadow: `
+              0 20px 40px rgba(239, 68, 68, 0.4),
+              inset 0 -8px 0 rgba(153, 27, 27, 0.3),
+              inset 0 4px 0 rgba(248, 113, 113, 0.3)
+            `,
+            background: isScanning 
+              ? 'linear-gradient(to bottom, #ef4444, #dc2626, #991b1b)'
+              : 'linear-gradient(to bottom, #f87171, #ef4444, #dc2626)'
+          }}
         >
+          <div className="absolute inset-2 rounded-full bg-gradient-to-b from-red-300 to-transparent opacity-30"></div>
           {getButtonContent()}
-        </Button>
+        </button>
 
         {useAI && (
           <div className="mt-4 flex items-center space-x-2 text-blue-600">

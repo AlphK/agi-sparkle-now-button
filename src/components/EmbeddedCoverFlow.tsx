@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface NewsSource {
@@ -39,6 +39,8 @@ const VERIFIED_NEWS_SOURCES: NewsSource[] = [
 const EmbeddedCoverFlow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedSources, setLoadedSources] = useState<Set<number>>(new Set());
+  const carouselRef = useRef<HTMLElement>(null);
+  const isScrollingRef = useRef(false);
 
   const getCardTransform = (index: number) => {
     const diff = index - activeIndex;
@@ -80,66 +82,91 @@ const EmbeddedCoverFlow = () => {
 
   const handleIframeLoad = (index: number) => {
     setLoadedSources(prev => new Set(prev).add(index));
-    console.log(`Cargó: ${VERIFIED_NEWS_SOURCES[index].title}`);
+    console.log(`✅ Cargó iframe: ${VERIFIED_NEWS_SOURCES[index].title}`);
   };
 
   const handleIframeError = (index: number, error: any) => {
-    console.error(`Error en ${VERIFIED_NEWS_SOURCES[index].title}:`, error);
+    console.error(`❌ Error en iframe ${VERIFIED_NEWS_SOURCES[index].title}:`, error);
   };
 
   useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
     const handleWheel = (event: WheelEvent) => {
+      // Solo interceptar scroll si estamos en el área del carrusel
       const target = event.target as Element;
-      const carouselSection = document.getElementById('carousel-section');
+      const isInCarousel = carousel.contains(target);
       
-      if (carouselSection && carouselSection.contains(target)) {
-        // Solo prevenir scroll si no estamos dentro de un iframe
-        const isInsideIframe = target.closest('iframe') || target.closest('.card-iframe-container');
+      if (isInCarousel) {
+        // Verificar si el scroll viene de dentro de un iframe activo
+        const activeCard = carousel.querySelector('.coverflow-card.active');
+        const isInActiveIframe = activeCard && activeCard.contains(target);
         
-        if (!isInsideIframe) {
+        if (!isInActiveIframe && !isScrollingRef.current) {
           event.preventDefault();
+          event.stopPropagation();
+          
+          isScrollingRef.current = true;
+          
           if (event.deltaY > 0) {
             nextSlide();
           } else {
             prevSlide();
           }
+          
+          // Liberar el scroll después de un pequeño delay
+          setTimeout(() => {
+            isScrollingRef.current = false;
+          }, 500);
         }
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') {
+        event.preventDefault();
         prevSlide();
       } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
         nextSlide();
       }
     };
 
-    // Usar passive: false solo cuando sea necesario
-    document.addEventListener('wheel', handleWheel, { passive: false });
+    // Usar capture para interceptar eventos antes que lleguen a los iframes
+    document.addEventListener('wheel', handleWheel, { passive: false, capture: true });
     document.addEventListener('keydown', handleKeyDown);
     
     return () => {
-      document.removeEventListener('wheel', handleWheel);
+      document.removeEventListener('wheel', handleWheel, true);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
   return (
-    <section id="carousel-section" className="min-h-screen bg-white p-8 relative overflow-hidden">
+    <section 
+      ref={carouselRef}
+      id="ai-carousel-section" 
+      className="min-h-screen bg-white p-8 relative overflow-hidden"
+      style={{ 
+        scrollBehavior: 'auto',
+        overscrollBehavior: 'contain'
+      }}
+    >
       <style>{`
         .coverflow-card {
           position: absolute;
           width: 600px;
           height: 800px;
           cursor: pointer;
-          transition: all 0.3s ease-in-out;
+          transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
           background: white;
           border: 2px solid #e5e7eb;
           border-radius: 16px;
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
           transform-style: preserve-3d;
-          pointer-events: auto;
+          will-change: transform;
+          isolation: isolate;
         }
 
         .coverflow-card:hover {
@@ -158,6 +185,7 @@ const EmbeddedCoverFlow = () => {
           background: white;
           border-radius: 12px;
           position: relative;
+          isolation: isolate;
         }
 
         .card-iframe-container iframe {
@@ -166,16 +194,26 @@ const EmbeddedCoverFlow = () => {
           border: none;
           background: white;
           border-radius: 12px;
+          display: block;
+        }
+
+        /* Mejorar la gestión de eventos en iframes */
+        .coverflow-card:not(.active) {
+          pointer-events: none;
+        }
+
+        .coverflow-card.active {
           pointer-events: auto;
         }
 
-        /* Mejorar la interacción con iframes */
         .coverflow-card:not(.active) .card-iframe-container {
           pointer-events: none;
+          user-select: none;
         }
 
         .coverflow-card.active .card-iframe-container {
           pointer-events: auto;
+          user-select: auto;
         }
 
         .card-dots {
@@ -194,9 +232,16 @@ const EmbeddedCoverFlow = () => {
         .card-dot.yellow { background-color: #eab308; }
         .card-dot.green { background-color: #22c55e; }
 
-        /* Evitar interferencia con scroll global */
-        #carousel-section {
+        /* Prevenir conflictos de scroll */
+        #ai-carousel-section {
+          scroll-snap-type: none;
+          overscroll-behavior: contain;
           touch-action: pan-y;
+        }
+
+        /* Asegurar que los iframes activos pueden recibir eventos */
+        .coverflow-card.active iframe {
+          pointer-events: auto !important;
         }
       `}</style>
 
@@ -231,7 +276,7 @@ const EmbeddedCoverFlow = () => {
                             e.stopPropagation();
                             window.open(source.url, '_blank');
                           }}
-                          className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors z-20"
                           title="Abrir en nueva pestaña"
                         >
                           <ExternalLink className="w-4 h-4" />
@@ -248,13 +293,14 @@ const EmbeddedCoverFlow = () => {
                       <iframe
                         src={source.url}
                         loading="lazy"
-                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation allow-pointer-lock"
                         referrerPolicy="no-referrer-when-downgrade"
                         onLoad={() => handleIframeLoad(index)}
                         onError={(e) => handleIframeError(index, e)}
                         style={{ 
                           display: 'block',
-                          visibility: loadedSources.has(index) ? 'visible' : 'hidden'
+                          visibility: loadedSources.has(index) ? 'visible' : 'hidden',
+                          pointerEvents: isActive ? 'auto' : 'none'
                         }}
                       />
                     </div>
@@ -280,14 +326,14 @@ const EmbeddedCoverFlow = () => {
 
           <button
             onClick={prevSlide}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-20"
+            className="absolute left-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-30"
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           
           <button
             onClick={nextSlide}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-20"
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 p-3 bg-white/80 backdrop-blur rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 z-30"
           >
             <ChevronRight className="w-6 h-6 text-gray-700" />
           </button>
