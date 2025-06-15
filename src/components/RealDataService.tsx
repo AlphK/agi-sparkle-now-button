@@ -47,7 +47,9 @@ export class RealDataService {
   initializeAI() {
     try {
       this.openAIService = OpenAIService.getInstance();
+      console.log('🧠 OpenAI Service inicializado correctamente');
     } catch (error) {
+      console.error('❌ Error inicializando OpenAI Service:', error);
       this.toast({
         title: "⚠️ AI Service Warning",
         description: "AI analysis will use fallback mode",
@@ -334,12 +336,18 @@ export class RealDataService {
     reasoning: string;
     newsWithAnalysis: NewsItem[];
   }> {
-    this.toast({
-      title: "🧠 AI-Powered Analysis",
-      description: "Using expanded source list with rate limiting...",
-    });
+    console.log('🔍 INICIANDO BÚSQUEDA INTELIGENTE CON IA...');
+    
+    // Inicializar OpenAI si no está disponible
+    if (!this.openAIService) {
+      console.log('🧠 Inicializando servicio OpenAI...');
+      this.initializeAI();
+    }
 
-    console.log('🔍 Starting comprehensive AGI scan with expanded sources...');
+    this.toast({
+      title: "🧠 Análisis IA Activo",
+      description: "Usando OpenAI para análisis inteligente...",
+    });
 
     const [arxivPapers, redditPosts, hnPosts, rssFeeds] = await Promise.all([
       this.fetchArXivPapers(),
@@ -349,23 +357,24 @@ export class RealDataService {
     ]);
 
     const allNews = [...arxivPapers, ...redditPosts, ...hnPosts, ...rssFeeds];
-    console.log(`📊 Total items collected: ${allNews.length}`);
+    console.log(`📊 Total items recolectados: ${allNews.length}`);
 
+    // Verificar que OpenAI esté disponible
     if (!this.openAIService) {
-      this.initializeAI();
-    }
-
-    if (!this.openAIService) {
+      console.log('❌ OpenAI no disponible, usando análisis básico');
       return this.performBasicAGIScan(allNews);
     }
 
     try {
-      const analysisInput = allNews.map(item => ({
+      console.log('🤖 Enviando noticias a OpenAI para análisis...');
+      
+      const analysisInput = allNews.slice(0, 15).map(item => ({
         title: item.title,
         source: item.source
       }));
 
       const batchAnalysis = await this.openAIService.batchAnalyzeNews(analysisInput);
+      console.log('✅ Análisis OpenAI completado:', batchAnalysis);
 
       const newsWithAnalysis = allNews.map((item, index) => {
         const analysis = batchAnalysis.items[index]?.analysis;
@@ -380,6 +389,7 @@ export class RealDataService {
         };
       });
 
+      // Ordenar por relevancia IA
       newsWithAnalysis.sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         const aRelevance = relevanceOrder[a.relevance];
@@ -394,18 +404,23 @@ export class RealDataService {
         return bProb - aProb;
       });
 
-      console.log(`✅ Analysis complete. Detection: ${batchAnalysis.overallAgiDetection.detected}`);
+      console.log(`✅ ANÁLISIS IA COMPLETADO. Detección: ${batchAnalysis.overallAgiDetection.detected}, Confianza: ${batchAnalysis.overallAgiDetection.confidence}%`);
 
       return {
         detected: batchAnalysis.overallAgiDetection.detected,
         confidence: batchAnalysis.overallAgiDetection.confidence,
-        reasoning: batchAnalysis.overallAgiDetection.reasoning,
-        sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Google DeepMind', 'Import AI', 'Gary Marcus', 'MIT Tech Review'],
+        reasoning: `[IA] ${batchAnalysis.overallAgiDetection.reasoning}`,
+        sources: ['OpenAI Analysis', 'ArXiv', 'Reddit', 'Hacker News', 'OpenAI Blog', 'Google DeepMind', 'MIT Tech Review'],
         newsWithAnalysis
       };
 
     } catch (error) {
-      console.error('OpenAI analysis failed, falling back to basic scan:', error);
+      console.error('❌ OpenAI analysis failed, usando análisis básico:', error);
+      this.toast({
+        title: "⚠️ IA Analysis Failed",
+        description: "Usando análisis básico como respaldo",
+        variant: "destructive",
+      });
       return this.performBasicAGIScan(allNews);
     }
   }
@@ -417,6 +432,8 @@ export class RealDataService {
     reasoning: string;
     newsWithAnalysis: NewsItem[];
   } {
+    console.log('🔍 EJECUTANDO ANÁLISIS BÁSICO (SIN IA)...');
+    
     const criticalNews = allNews.filter(item => item.relevance === 'critical');
     const agiKeywords = ['agi', 'artificial general intelligence', 'consciousness', 'sentient'];
     const hasAGIIndicators = allNews.some(item => 
@@ -428,8 +445,8 @@ export class RealDataService {
     return {
       detected: confidence > 80,
       confidence,
-      reasoning: `Found ${criticalNews.length} critical items with ${hasAGIIndicators ? 'AGI' : 'no AGI'} indicators from expanded source list`,
-      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI', 'Google DeepMind', 'Import AI', 'Gary Marcus', 'MIT Tech Review'],
+      reasoning: `[BÁSICO] Found ${criticalNews.length} critical items con ${hasAGIIndicators ? 'AGI' : 'no AGI'} indicators`,
+      sources: ['ArXiv', 'Reddit', 'Hacker News', 'OpenAI Blog', 'Google DeepMind'],
       newsWithAnalysis: allNews.sort((a, b) => {
         const relevanceOrder = { 'critical': 0, 'high': 1, 'medium': 2, 'low': 3 };
         return relevanceOrder[a.relevance] - relevanceOrder[b.relevance];
